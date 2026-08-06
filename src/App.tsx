@@ -1,27 +1,28 @@
-import { useState } from 'react'
-import Login from './components/Login'
-import Sidebar from './components/Sidebar'
-import Dashboard from './components/Dashboard'
-import Athletes from './components/Athletes'
-import Training from './components/Training'
-import Competitions from './components/Competitions'
-import Analytics from './components/Analytics'
-import { IconBell, IconSearch } from './components/Icons'
-
-type Page = 'dashboard' | 'athletes' | 'training' | 'competitions' | 'analytics' | 'settings'
-
-interface User {
-  name: string
-  role: 'admin' | 'coach'
-}
+import { useState } from 'react';
+import { useAuth } from './contexts/AuthContext';
+import { Page } from './types';
+import Login from './components/Login';
+import Sidebar from './components/Sidebar';
+import Dashboard from './components/Dashboard';
+import Athletes from './components/Athletes';
+import Training from './components/Training';
+import Competitions from './components/Competitions';
+import Analytics from './components/Analytics';
+import Disciplines from './components/Disciplines';
+import { IconSearch, IconBell } from './components/Icons';
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null)
-  const [page, setPage] = useState<Page>('dashboard')
+  const { user, coachProfile, signOut } = useAuth();
+  const [page, setPage] = useState<Page>('dashboard');
 
-  if (!user) {
-    return <Login onLogin={(role, name) => setUser({ role, name })} />
+  if (!user || !coachProfile) {
+    return <Login />;
   }
+
+  // TODO: добавить поле role в таблицу coaches и в тип coachProfile,
+  // пока по умолчанию считаем всех вошедших тренерами
+  const role: 'admin' | 'coach' = 'coach';
+  const displayName = coachProfile.name;
 
   const pageComponent = {
     dashboard: <Dashboard />,
@@ -30,16 +31,17 @@ export default function App() {
     competitions: <Competitions />,
     analytics: <Analytics />,
     settings: <SettingsPlaceholder />,
-  }[page]
+    disciplines: <Disciplines />,
+  }[page];
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#080a0f' }}>
       <Sidebar
         current={page}
         onNavigate={setPage}
-        userName={user.name}
-        role={user.role}
-        onLogout={() => setUser(null)}
+        userName={displayName}
+        role={role}
+        onLogout={signOut}
         notifications={3}
       />
 
@@ -131,9 +133,16 @@ export default function App() {
               fontWeight: 700,
               color: '#c6f135',
             }}>
-              {user.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
+             {(user.user_metadata?.name ?? '')
+              .split(' ')
+              .filter(Boolean)
+              .map((w: string) => w[0])
+              .join('')
+              .slice(0, 2) || '??'}
             </div>
-            <span style={{ fontSize: 12, color: '#d1d5db', fontWeight: 500 }}>{user.name}</span>
+            <span style={{ fontSize: 12, color: '#d1d5db', fontWeight: 500 }}>
+  {user.user_metadata?.name ?? coachProfile?.name ?? 'Без имени'}
+</span>
             <span style={{
               fontSize: 9,
               padding: '2px 6px',

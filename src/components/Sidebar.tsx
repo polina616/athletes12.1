@@ -1,24 +1,24 @@
-import { IconDash, IconAthletes, IconCalendar, IconTrophy, IconChart, IconSettings, IconLogout, IconRun, IconBell } from './Icons'
-
-type Page = 'dashboard' | 'athletes' | 'training' | 'competitions' | 'analytics' | 'settings'
-
+import { Page } from '../types'; // <-- импорт
+import { IconDash, IconAthletes, IconCalendar, IconTrophy, IconChart, IconSettings, IconLogout, IconList } from './Icons';
+import React from 'react';
 interface SidebarProps {
-  current: Page
-  onNavigate: (p: Page) => void
-  userName: string
-  role: 'admin' | 'coach'
-  onLogout: () => void
-  notifications?: number
+  current: Page; // используем общий тип
+  onNavigate: (p: Page) => void;
+  userName: string;
+  role: 'admin' | 'coach';
+  onLogout: () => void;
+  notifications?: number;
 }
 
-const navItems: { id: Page; label: string; Icon: () => JSX.Element }[] = [
+const navItems: { id: Page; label: string; Icon: () => React.JSX.Element }[] = [
   { id: 'dashboard', label: 'Панель управления', Icon: IconDash },
   { id: 'athletes', label: 'Спортсмены', Icon: IconAthletes },
   { id: 'training', label: 'Тренировки', Icon: IconCalendar },
   { id: 'competitions', label: 'Соревнования', Icon: IconTrophy },
   { id: 'analytics', label: 'Аналитика', Icon: IconChart },
+  { id: 'disciplines', label: 'Дисциплины', Icon: IconList }, // новый пункт
   { id: 'settings', label: 'Настройки', Icon: IconSettings },
-]
+];
 
 export default function Sidebar({ current, onNavigate, userName, role, onLogout, notifications = 3 }: SidebarProps) {
   return (
