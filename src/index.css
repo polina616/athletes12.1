@@ -1,0 +1,86 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import 'tailwindcss';
+
+@theme inline {
+  --font-display: 'Barlow Condensed', sans-serif;
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --color-bg: #080a0f;
+  --color-surface: #0f1117;
+  --color-panel: #141720;
+  --color-border: #1e2230;
+  --color-border-bright: #2a3040;
+  --color-lime: #c6f135;
+  --color-lime-dim: #9abe1a;
+  --color-text: #f0f2f5;
+  --color-muted: #6b7280;
+  --color-subtle: #374151;
+  --color-red: #f87171;
+  --color-amber: #fbbf24;
+  --color-blue: #60a5fa;
+  --color-purple: #a78bfa;
+}
+
+* {
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: #1e2230 transparent;
+}
+
+*::-webkit-scrollbar { width: 4px; height: 4px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: #1e2230; border-radius: 2px; }
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #080a0f;
+  color: #f0f2f5;
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-display { font-family: 'Barlow Condensed', sans-serif; }
+.font-mono { font-family: 'JetBrains Mono', monospace; }
+
+.glass {
+  background: rgba(15, 17, 23, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(30, 34, 48, 0.8);
+}
+
+.glass-bright {
+  background: rgba(20, 23, 32, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(42, 48, 64, 0.9);
+}
+
+.lime-glow {
+  box-shadow: 0 0 20px rgba(198, 241, 53, 0.15), 0 0 40px rgba(198, 241, 53, 0.05);
+}
+
+.lime-text-glow {
+  text-shadow: 0 0 20px rgba(198, 241, 53, 0.4);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.9); opacity: 1; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+
+.animate-fade-in { animation: fadeIn 0.3s ease forwards; }
+
+.trend-up { color: #c6f135; }
+.trend-down { color: #f87171; }
+.trend-neutral { color: #6b7280; }
+
+.recharts-tooltip-wrapper { outline: none; }
