@@ -197,10 +197,12 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     refresh();
   }, [refresh]);
 
-  const addAthlete = async (input: NewAthleteInput) => {
-    if (!coachProfile) return { error: 'Нет профиля тренера' };
+    const addAthlete = async (input: NewAthleteInput) => {
+    if (!coachProfile) return { error: 'Нет профиля тренера. Выйдите и войдите снова.' };
+    if (!coachProfile.id) return { error: 'Ошибка профиля тренера (нет ID). Выйдите и войдите снова.' };
     if (!input.name.trim()) return { error: 'Укажите имя спортсмена' };
 
+    // Проверка на дубликат
     const { data: existing } = await supabase
       .from('athletes')
       .select('id')
@@ -223,20 +225,32 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       specialization: input.specialization,
       status: 'active',
     });
-    if (error) return { error: error.message };
+    if (error) {
+      console.error('Ошибка добавления спортсмена:', error);
+      return { error: error.message };
+    }
     await refresh();
     return { error: null };
   };
 
   const deleteAthlete = async (id: string) => {
+    if (!coachProfile?.id) return { error: 'Нет профиля тренера' };
+    
+    // Сначала удаляем все результаты спортсмена
     const { error: resultsError } = await supabase
       .from('results')
       .delete()
       .eq('athlete_id', id);
     if (resultsError) return { error: resultsError.message };
 
-    const { error } = await supabase.from('athletes').delete().eq('id', id);
+    // Потом удаляем самого спортсмена
+    const { error } = await supabase
+      .from('athletes')
+      .delete()
+      .eq('id', id)
+      .eq('coach_id', coachProfile.id); // защита: удаляем только своего
     if (error) return { error: error.message };
+    
     await refresh();
     return { error: null };
   };
