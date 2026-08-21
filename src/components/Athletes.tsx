@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { IconSearch, IconPlus, IconTrash } from './Icons'
 import AthleteProfile from './AthleteProfile'
-import { useAthletes, type Athlete, type NewAthleteInput } from '../contexts/AthletesContext'
+import { useAthletes, type Athlete, type NewAthleteInput } from '../contexts/Athletescontext'
 
 const LIME = '#c6f135'
 

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { decathlonEvents, heptathlonEvents, calcDecathlonPoints } from '../data/mockData'
-import { useAthletes, type Athlete } from '../contexts/AthletesContext'
+import { useAthletes, type Athlete } from '../contexts/Athletescontext'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   RadarChart, PolarGrid, PolarAngleAxis, Radar, AreaChart, Area,
@@ -123,9 +123,9 @@ function ResultsTab({ athlete }: { athlete: Athlete }) {
                 <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis domain={['auto', 'auto']} tick={{ fill: '#6b7280', fontSize: 10, fontFamily: "'JetBrains Mono'" }} axisLine={false} tickLine={false} width={50} />
                 <Tooltip
-                  contentStyle={{ background: '#141720', border: '1px solid #1e2230', borderRadius: 8, fontSize: 12 }}
-                  formatter={(v: number) => [v, activeDisc]}
-                />
+                 contentStyle={{ background: '#141720', border: '1px solid #1e2230', borderRadius: 8, fontSize: 12 }}
+                 formatter={(value: any) => [String(value), activeDisc] as [string, string]}
+/>
                 <Area type="monotone" dataKey="val" stroke={LIME} strokeWidth={2} fill="url(#area)" dot={{ fill: LIME, r: 4 }} />
               </AreaChart>
             </ResponsiveContainer>
@@ -195,7 +195,10 @@ function DecathlonTab({ athlete }: { athlete: Athlete }) {
   const hasAnyScore = eventsWithScores.some(e => e.pts > 0)
   const maxPts = eventsWithScores.length * 1000
   const bestEvent = eventsWithScores.reduce((b, e) => e.pts > b.pts ? e : b, eventsWithScores[0])
-  const worstEvent = eventsWithScores.filter(e => e.pts > 0).reduce((b, e) => e.pts < b.pts ? e : b, eventsWithScores.find(e => e.pts > 0))
+  const scoredEvents = eventsWithScores.filter(e => e.pts > 0)
+const worstEvent = scoredEvents.length > 0
+  ? scoredEvents.reduce((b, e) => (e.pts < b.pts ? e : b))
+  : undefined
 
   const radarData = eventsWithScores.map(e => ({
     event: e.name.replace('Прыжок ', '').replace('Метание ', '').replace(' м', 'м'),
