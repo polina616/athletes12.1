@@ -35,27 +35,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Ошибка загрузки профиля тренера:', error);
       return null;
     }
-
     if (data) return data;
 
-    // Профиля ещё нет (например, пользователь был создан не через signUp) —
-    // создаём запись, чтобы не застревать на экране входа.
-    const { data: created, error: insertError } = await supabase
+    // Профиля ещё нет (например, пользователь был создан не через signUp).
+    // upsert + ignoreDuplicates делает вставку идемпотентной: если getSession()
+    // и onAuthStateChange (INITIAL_SESSION) вызовут эту функцию почти
+    // одновременно, второй вызов не упадёт с 409, а просто ничего не вставит.
+    const { error: upsertError } = await supabase
       .from('coaches')
-      .insert({
-        auth_user_id: userId,
-        name: fallbackName ?? 'Тренер',
-        email: fallbackEmail ?? '',
-      })
-      .select('id, name, email')
-      .single();
+      .upsert(
+        {
+          auth_user_id: userId,
+          name: fallbackName ?? 'Тренер',
+          email: fallbackEmail ?? '',
+        },
+        { onConflict: 'auth_user_id', ignoreDuplicates: true }
+      );
 
-    if (insertError) {
-      console.error('Не удалось создать профиль тренера:', insertError);
+    if (upsertError) {
+      console.error('Не удалось создать профиль тренера:', upsertError);
       return null;
     }
 
-    return created;
+    // После upsert строка гарантированно существует (создана нами или
+    // параллельным вызовом) — перечитываем её.
+    const { data: refetched, error: refetchError } = await supabase
+      .from('coaches')
+      .select('id, name, email')
+      .eq('auth_user_id', userId)
+      .maybeSingle();
+
+    if (refetchError) {
+      console.error('Ошибка повторной загрузки профиля тренера:', refetchError);
+      return null;
+    }
+    return refetched;
   };
 
   useEffect(() => {

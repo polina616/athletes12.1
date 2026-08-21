@@ -1,14 +1,15 @@
 import { useState } from 'react'
-import { athletes, results, decathlonEvents, heptathlonEvents, calcDecathlonPoints, type Athlete } from '../data/mockData'
+import { decathlonEvents, heptathlonEvents, calcDecathlonPoints } from '../data/mockData'
+import { useAthletes, type Athlete } from '../contexts/AthletesContext'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   RadarChart, PolarGrid, PolarAngleAxis, Radar, AreaChart, Area,
 } from 'recharts'
-import { IconChevron, IconTrend, IconPlus } from './Icons'
+import { IconChevron, IconTrend } from './Icons'
 
 const LIME = '#c6f135'
 
-const tabs = ['Обзор', 'Результаты', 'Медицина', 'Многоборье', 'Аналитика'] as const
+const tabs = ['Обзор', 'Результаты', 'Медицина', 'Многоборье'] as const
 type Tab = typeof tabs[number]
 
 function StatBadge({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -26,13 +27,26 @@ function StatBadge({ label, value, sub }: { label: string; value: string; sub?: 
   )
 }
 
+function EmptyState({ text }: { text: string }) {
+  return (
+    <div style={{ textAlign: 'center', padding: '50px 0', color: '#6b7280', fontSize: 13 }}>{text}</div>
+  )
+}
+
 function ResultsTab({ athlete }: { athlete: Athlete }) {
+  const { results } = useAthletes()
   const athleteResults = results.filter(r => r.athleteId === athlete.id)
   const disciplines = [...new Set(athleteResults.map(r => r.discipline))]
   const [selectedDisc, setSelectedDisc] = useState(disciplines[0] || '')
 
+  if (athleteResults.length === 0) {
+    return <EmptyState text="Пока нет внесённых результатов для этого спортсмена." />
+  }
+
+  const activeDisc = disciplines.includes(selectedDisc) ? selectedDisc : disciplines[0]
+
   const discResults = athleteResults
-    .filter(r => r.discipline === selectedDisc)
+    .filter(r => r.discipline === activeDisc)
     .sort((a, b) => a.date.localeCompare(b.date))
 
   const chartData = discResults.map(r => ({
@@ -50,7 +64,6 @@ function ResultsTab({ athlete }: { athlete: Athlete }) {
 
   return (
     <div>
-      {/* Discipline selector */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
         {disciplines.map(d => (
           <button
@@ -60,11 +73,11 @@ function ResultsTab({ athlete }: { athlete: Athlete }) {
               padding: '6px 12px',
               borderRadius: 6,
               border: '1px solid',
-              borderColor: selectedDisc === d ? LIME : '#1e2230',
-              background: selectedDisc === d ? 'rgba(198,241,53,0.1)' : 'transparent',
-              color: selectedDisc === d ? LIME : '#9ca3af',
+              borderColor: activeDisc === d ? LIME : '#1e2230',
+              background: activeDisc === d ? 'rgba(198,241,53,0.1)' : 'transparent',
+              color: activeDisc === d ? LIME : '#9ca3af',
               fontSize: 12,
-              fontWeight: selectedDisc === d ? 600 : 400,
+              fontWeight: activeDisc === d ? 600 : 400,
               cursor: 'pointer',
               fontFamily: "'Inter', sans-serif",
               transition: 'all 0.15s',
@@ -73,9 +86,8 @@ function ResultsTab({ athlete }: { athlete: Athlete }) {
         ))}
       </div>
 
-      {discResults.length > 0 ? (
+      {discResults.length > 0 && (
         <>
-          {/* Stats row */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
             <StatBadge label="Лучший результат" value={best?.result || '-'} sub={best?.unit} />
             <StatBadge label="Результатов" value={String(discResults.length)} />
@@ -93,7 +105,6 @@ function ResultsTab({ athlete }: { athlete: Athlete }) {
             />
           </div>
 
-          {/* Chart */}
           <div style={{
             background: 'rgba(20,23,32,0.6)',
             border: '1px solid #1e2230',
@@ -113,14 +124,13 @@ function ResultsTab({ athlete }: { athlete: Athlete }) {
                 <YAxis domain={['auto', 'auto']} tick={{ fill: '#6b7280', fontSize: 10, fontFamily: "'JetBrains Mono'" }} axisLine={false} tickLine={false} width={50} />
                 <Tooltip
                   contentStyle={{ background: '#141720', border: '1px solid #1e2230', borderRadius: 8, fontSize: 12 }}
-                  formatter={(v: number) => [v, selectedDisc]}
+                  formatter={(v: number) => [v, activeDisc]}
                 />
                 <Area type="monotone" dataKey="val" stroke={LIME} strokeWidth={2} fill="url(#area)" dot={{ fill: LIME, r: 4 }} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
 
-          {/* Table */}
           <div style={{ background: 'rgba(20,23,32,0.5)', borderRadius: 10, overflow: 'hidden', border: '1px solid #1e2230' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
@@ -137,7 +147,7 @@ function ResultsTab({ athlete }: { athlete: Athlete }) {
                     <td style={{ padding: '10px 14px', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: r.id === best?.id ? LIME : '#f0f2f5' }}>
                       {r.result} {r.unit}
                     </td>
-                    <td style={{ padding: '10px 14px', color: '#9ca3af' }}>{r.location}</td>
+                    <td style={{ padding: '10px 14px', color: '#9ca3af' }}>{r.location || '—'}</td>
                     <td style={{ padding: '10px 14px' }}>
                       <span style={{
                         fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 600,
@@ -156,14 +166,13 @@ function ResultsTab({ athlete }: { athlete: Athlete }) {
             </table>
           </div>
         </>
-      ) : (
-        <div style={{ textAlign: 'center', padding: '60px 0', color: '#6b7280' }}>Результатов не найдено</div>
       )}
     </div>
   )
 }
 
 function DecathlonTab({ athlete }: { athlete: Athlete }) {
+  const { results } = useAthletes()
   const events = athlete.gender === 'F' ? heptathlonEvents : decathlonEvents
   const name = athlete.gender === 'F' ? 'Семиборье' : 'Десятиборье'
 
@@ -183,14 +192,19 @@ function DecathlonTab({ athlete }: { athlete: Athlete }) {
   })
 
   const totalPts = eventsWithScores.reduce((s, e) => s + e.pts, 0)
+  const hasAnyScore = eventsWithScores.some(e => e.pts > 0)
   const maxPts = eventsWithScores.length * 1000
   const bestEvent = eventsWithScores.reduce((b, e) => e.pts > b.pts ? e : b, eventsWithScores[0])
-  const worstEvent = eventsWithScores.filter(e => e.pts > 0).reduce((b, e) => e.pts < b.pts ? e : b, eventsWithScores[0])
+  const worstEvent = eventsWithScores.filter(e => e.pts > 0).reduce((b, e) => e.pts < b.pts ? e : b, eventsWithScores.find(e => e.pts > 0))
 
   const radarData = eventsWithScores.map(e => ({
     event: e.name.replace('Прыжок ', '').replace('Метание ', '').replace(' м', 'м'),
     pts: e.pts,
   }))
+
+  if (!hasAnyScore) {
+    return <EmptyState text={`Пока нет результатов ни по одной дисциплине ${name.toLowerCase()}а. Внесите тестирования во вкладке «Результаты».`} />
+  }
 
   return (
     <div>
@@ -205,20 +219,21 @@ function DecathlonTab({ athlete }: { athlete: Athlete }) {
             </span>
             <span style={{ fontSize: 16, color: '#6b7280' }}>очков</span>
           </div>
-          <div style={{ marginTop: 8, display: 'flex', gap: 16 }}>
+          <div style={{ marginTop: 8, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
             <div style={{ fontSize: 12 }}>
               <span style={{ color: '#6b7280' }}>Лучшая: </span>
               <span style={{ color: LIME, fontWeight: 600 }}>{bestEvent.name}</span>
               <span style={{ color: '#6b7280' }}> ({bestEvent.pts} pts)</span>
             </div>
-            <div style={{ fontSize: 12 }}>
-              <span style={{ color: '#6b7280' }}>Слабая: </span>
-              <span style={{ color: '#f87171', fontWeight: 600 }}>{worstEvent?.name || '—'}</span>
-              <span style={{ color: '#6b7280' }}> ({worstEvent?.pts || 0} pts)</span>
-            </div>
+            {worstEvent && (
+              <div style={{ fontSize: 12 }}>
+                <span style={{ color: '#6b7280' }}>Слабая: </span>
+                <span style={{ color: '#f87171', fontWeight: 600 }}>{worstEvent.name}</span>
+                <span style={{ color: '#6b7280' }}> ({worstEvent.pts} pts)</span>
+              </div>
+            )}
           </div>
         </div>
-        {/* Radar */}
         <div style={{ width: 220 }}>
           <ResponsiveContainer width={220} height={180}>
             <RadarChart data={radarData}>
@@ -230,7 +245,6 @@ function DecathlonTab({ athlete }: { athlete: Athlete }) {
         </div>
       </div>
 
-      {/* Events table */}
       <div style={{ background: 'rgba(20,23,32,0.5)', borderRadius: 10, overflow: 'hidden', border: '1px solid #1e2230' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
@@ -285,14 +299,16 @@ function DecathlonTab({ athlete }: { athlete: Athlete }) {
 }
 
 export default function AthleteProfile({ athleteId, onBack }: { athleteId: string; onBack: () => void }) {
-  const athlete = athletes.find(a => a.id === athleteId)!
+  const { athletes } = useAthletes()
+  const athlete = athletes.find(a => a.id === athleteId)
   const [tab, setTab] = useState<Tab>('Обзор')
 
   if (!athlete) return null
 
+  const initials = athlete.name.split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('')
+
   return (
     <div style={{ animation: 'fadeIn 0.3s ease forwards' }}>
-      {/* Back */}
       <button
         onClick={onBack}
         style={{
@@ -308,7 +324,6 @@ export default function AthleteProfile({ athleteId, onBack }: { athleteId: strin
         <IconChevron dir="left" /> Назад к списку
       </button>
 
-      {/* Header */}
       <div style={{
         background: 'rgba(15,17,23,0.8)',
         border: '1px solid #1e2230',
@@ -328,7 +343,6 @@ export default function AthleteProfile({ athleteId, onBack }: { athleteId: strin
           background: `linear-gradient(90deg, ${LIME}, transparent)`,
         }} />
 
-        {/* Photo */}
         <div style={{
           width: 88,
           height: 88,
@@ -337,11 +351,15 @@ export default function AthleteProfile({ athleteId, onBack }: { athleteId: strin
           border: '2px solid #1e2230',
           flexShrink: 0,
           background: '#141720',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <img src={athlete.photo} alt={athlete.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          {athlete.photo ? (
+            <img src={athlete.photo} alt={athlete.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            <span style={{ fontSize: 28, fontWeight: 800, color: '#c6f135', fontFamily: "'Barlow Condensed', sans-serif" }}>{initials}</span>
+          )}
         </div>
 
-        {/* Name & details */}
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
             <h2 style={{
@@ -367,9 +385,9 @@ export default function AthleteProfile({ athleteId, onBack }: { athleteId: strin
           </div>
           <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
             {[
-              { label: 'Возраст', val: `${athlete.age} лет` },
-              { label: 'Разряд', val: athlete.grade },
-              { label: 'Группа', val: athlete.group },
+              { label: 'Возраст', val: athlete.age !== null ? `${athlete.age} лет` : '—' },
+              { label: 'Разряд', val: athlete.grade || '—' },
+              { label: 'Группа', val: athlete.group || '—' },
               { label: 'Специализация', val: athlete.gender === 'F' ? 'Семиборье' : 'Десятиборье' },
             ].map(f => (
               <div key={f.label}>
@@ -378,20 +396,21 @@ export default function AthleteProfile({ athleteId, onBack }: { athleteId: strin
               </div>
             ))}
           </div>
-          <div style={{ marginTop: 8, fontSize: 12, color: '#6b7280', fontStyle: 'italic' }}>
-            "{athlete.coachComment}"
-          </div>
+          {athlete.coachComment && (
+            <div style={{ marginTop: 8, fontSize: 12, color: '#6b7280', fontStyle: 'italic' }}>
+              "{athlete.coachComment}"
+            </div>
+          )}
         </div>
 
-        {/* Physical stats */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, minWidth: 260 }}>
           {[
-            { l: 'Рост', v: `${athlete.height} см` },
-            { l: 'Вес', v: `${athlete.weight} кг` },
-            { l: 'Размах', v: `${athlete.armSpan} см` },
-            { l: 'Нога', v: `${athlete.legLength} см` },
-            { l: 'Обувь', v: `${athlete.shoeSize} EU` },
-            { l: 'С нами', v: athlete.trainingStart.slice(0, 4) },
+            { l: 'Рост', v: athlete.height ? `${athlete.height} см` : '—' },
+            { l: 'Вес', v: athlete.weight ? `${athlete.weight} кг` : '—' },
+            { l: 'Размах', v: athlete.armSpan ? `${athlete.armSpan} см` : '—' },
+            { l: 'Нога', v: athlete.legLength ? `${athlete.legLength} см` : '—' },
+            { l: 'Обувь', v: athlete.shoeSize ? `${athlete.shoeSize} EU` : '—' },
+            { l: 'С нами', v: athlete.trainingStart ? athlete.trainingStart.slice(0, 4) : '—' },
           ].map(s => (
             <div key={s.l} style={{ textAlign: 'center', padding: '8px', background: 'rgba(20,23,32,0.5)', borderRadius: 6 }}>
               <div style={{ fontSize: 9, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>{s.l}</div>
@@ -401,7 +420,6 @@ export default function AthleteProfile({ athleteId, onBack }: { athleteId: strin
         </div>
       </div>
 
-      {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: 'rgba(15,17,23,0.6)', borderRadius: 10, padding: 4, border: '1px solid #1e2230', width: 'fit-content' }}>
         {tabs.map(t => (
           <button
@@ -424,7 +442,6 @@ export default function AthleteProfile({ athleteId, onBack }: { athleteId: strin
         ))}
       </div>
 
-      {/* Tab content */}
       <div style={{
         background: 'rgba(15,17,23,0.8)',
         border: '1px solid #1e2230',
@@ -439,11 +456,11 @@ export default function AthleteProfile({ athleteId, onBack }: { athleteId: strin
               <h3 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.06em', margin: '0 0 14px', textTransform: 'uppercase' }}>Контакты</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {[
-                  { label: 'Телефон', value: athlete.phone },
-                  { label: 'Родители', value: athlete.parents },
-                  { label: 'Тел. родителей', value: athlete.parentPhone },
-                  { label: 'Дата рождения', value: athlete.birthDate },
-                  { label: 'Аллергии', value: athlete.allergies },
+                  { label: 'Телефон', value: athlete.phone || '—' },
+                  { label: 'Родители', value: athlete.parents || '—' },
+                  { label: 'Тел. родителей', value: athlete.parentPhone || '—' },
+                  { label: 'Дата рождения', value: athlete.birthDate || '—' },
+                  { label: 'Аллергии', value: athlete.allergies || '—' },
                 ].map(f => (
                   <div key={f.label} style={{ display: 'flex', gap: 12 }}>
                     <span style={{ fontSize: 12, color: '#6b7280', minWidth: 130 }}>{f.label}</span>
@@ -455,10 +472,10 @@ export default function AthleteProfile({ athleteId, onBack }: { athleteId: strin
             <div>
               <h3 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.06em', margin: '0 0 14px', textTransform: 'uppercase' }}>Цели</h3>
               <div style={{ fontSize: 13, color: '#d1d5db', lineHeight: 1.7, padding: '12px 14px', background: 'rgba(20,23,32,0.5)', borderRadius: 8, border: '1px solid #1e2230' }}>
-                {athlete.goals}
+                {athlete.goals || 'Цели пока не заданы.'}
               </div>
               <h3 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.06em', margin: '20px 0 14px', textTransform: 'uppercase' }}>Любимая дисциплина</h3>
-              <div style={{ fontSize: 14, color: LIME, fontWeight: 600 }}>{athlete.favoriteEvent}</div>
+              <div style={{ fontSize: 14, color: LIME, fontWeight: 600 }}>{athlete.favoriteEvent || '—'}</div>
             </div>
           </div>
         )}
@@ -466,68 +483,14 @@ export default function AthleteProfile({ athleteId, onBack }: { athleteId: strin
         {tab === 'Медицина' && (
           <div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
-              <StatBadge label="Статус" value="Допущен" />
-              <StatBadge label="Следующий осмотр" value="15.03.2025" />
-              <StatBadge label="Травм за сезон" value={athlete.id === 'a5' ? '1' : '0'} />
+              <StatBadge label="Статус" value={athlete.status === 'injured' ? 'Травма' : 'Допущен'} />
+              <StatBadge label="Мед. ограничения" value={athlete.medicalNotes || '—'} />
+              <StatBadge label="Аллергии" value={athlete.allergies || '—'} />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              <div>
-                <h3 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.06em', margin: '0 0 12px', textTransform: 'uppercase' }}>Медицинские данные</h3>
-                {[
-                  { label: 'Мед. ограничения', value: athlete.medicalNotes },
-                  { label: 'Аллергии', value: athlete.allergies },
-                  { label: 'Дата осмотра', value: '15.12.2024' },
-                ].map(f => (
-                  <div key={f.label} style={{ display: 'flex', gap: 12, marginBottom: 8 }}>
-                    <span style={{ fontSize: 12, color: '#6b7280', minWidth: 140 }}>{f.label}</span>
-                    <span style={{ fontSize: 12, color: '#d1d5db' }}>{f.value}</span>
-                  </div>
-                ))}
-              </div>
-              <div>
-                <h3 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.06em', margin: '0 0 12px', textTransform: 'uppercase' }}>История травм</h3>
-                {athlete.id === 'a4' ? (
-                  <div style={{ padding: '12px', background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.15)', borderRadius: 8 }}>
-                    <div style={{ fontSize: 13, color: '#fbbf24', fontWeight: 600 }}>Травма плеча</div>
-                    <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>Сентябрь 2022 — Январь 2023 · Восстановлен</div>
-                  </div>
-                ) : athlete.id === 'a5' ? (
-                  <div style={{ padding: '12px', background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 8 }}>
-                    <div style={{ fontSize: 13, color: '#f87171', fontWeight: 600 }}>Растяжение голеностопа</div>
-                    <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>Октябрь 2024 — в процессе реабилитации</div>
-                  </div>
-                ) : (
-                  <div style={{ fontSize: 13, color: '#6b7280' }}>Травм не зафиксировано</div>
-                )}
-              </div>
-            </div>
+            <EmptyState text="История травм и медосмотров пока не ведётся — этот раздел появится позже." />
           </div>
         )}
         {tab === 'Многоборье' && <DecathlonTab athlete={athlete} />}
-        {tab === 'Аналитика' && (
-          <div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
-              <StatBadge label="Тренировок" value={String(results.filter(r => r.athleteId === athlete.id).length)} sub="результатов внесено" />
-              <StatBadge label="Лучший месяц" value="Сен 2024" sub="по приросту" />
-              <StatBadge label="Прогноз / 6 мес" value="+340" sub="очков десятиборья" />
-              <StatBadge label="КМС выполнение" value="87%" sub="вероятность к концу сезона" />
-            </div>
-            <div style={{ padding: '16px', background: 'rgba(20,23,32,0.5)', border: '1px solid #1e2230', borderRadius: 10 }}>
-              <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 4, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                Прогноз результата
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 12 }}>
-                {[{ period: '1 месяц', val: '8 280' }, { period: '3 месяца', val: '8 450' }, { period: '6 месяцев', val: '8 650' }, { period: '1 год', val: '8 900' }].map(p => (
-                  <div key={p.period} style={{ textAlign: 'center', padding: '14px', background: 'rgba(198,241,53,0.04)', border: '1px solid rgba(198,241,53,0.1)', borderRadius: 8 }}>
-                    <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 6 }}>{p.period}</div>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: LIME }}>{p.val}</div>
-                    <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>очков</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )
