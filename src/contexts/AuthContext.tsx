@@ -20,11 +20,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [coachProfile, setCoachProfile] = useState<AuthContextType['coachProfile']>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchCoachProfile = async (
-    userId: string,
-    fallbackName?: string,
-    fallbackEmail?: string
-  ) => {
+  const fetchCoachProfile = async (userId: string) => {
     const { data, error } = await supabase
       .from('coaches')
       .select('id, name, email')
@@ -35,41 +31,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Ошибка загрузки профиля тренера:', error);
       return null;
     }
-    if (data) return data;
-
-    // Профиля ещё нет (например, пользователь был создан не через signUp).
-    // upsert + ignoreDuplicates делает вставку идемпотентной: если getSession()
-    // и onAuthStateChange (INITIAL_SESSION) вызовут эту функцию почти
-    // одновременно, второй вызов не упадёт с 409, а просто ничего не вставит.
-    const { error: upsertError } = await supabase
-      .from('coaches')
-      .upsert(
-        {
-          auth_user_id: userId,
-          name: fallbackName ?? 'Тренер',
-          email: fallbackEmail ?? '',
-        },
-        { onConflict: 'auth_user_id', ignoreDuplicates: true }
-      );
-
-    if (upsertError) {
-      console.error('Не удалось создать профиль тренера:', upsertError);
-      return null;
-    }
-
-    // После upsert строка гарантированно существует (создана нами или
-    // параллельным вызовом) — перечитываем её.
-    const { data: refetched, error: refetchError } = await supabase
-      .from('coaches')
-      .select('id, name, email')
-      .eq('auth_user_id', userId)
-      .maybeSingle();
-
-    if (refetchError) {
-      console.error('Ошибка повторной загрузки профиля тренера:', refetchError);
-      return null;
-    }
-    return refetched;
+    return data;
   };
 
   useEffect(() => {
@@ -77,11 +39,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchCoachProfile(
-          session.user.id,
-          session.user.user_metadata?.name,
-          session.user.email
-        ).then(profile => setCoachProfile(profile));
+        fetchCoachProfile(session.user.id).then(profile => setCoachProfile(profile));
       }
       setLoading(false);
     });
@@ -90,11 +48,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchCoachProfile(
-          session.user.id,
-          session.user.user_metadata?.name,
-          session.user.email
-        ).then(profile => setCoachProfile(profile));
+        fetchCoachProfile(session.user.id).then(profile => setCoachProfile(profile));
       } else {
         setCoachProfile(null);
       }
@@ -110,19 +64,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signUp = async (email: string, password: string, name: string) => {
-    // Создаём пользователя в auth
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { name } }
     });
     if (authError) throw authError;
-    // Создаём запись в coaches
+
     if (authData.user) {
       const { error: coachError } = await supabase
         .from('coaches')
         .insert({ auth_user_id: authData.user.id, name, email });
-      if (coachError) throw coachError;
+      if (coachError) {
+        console.error('Не удалось создать профиль тренера:', coachError);
+      }
     }
   };
 

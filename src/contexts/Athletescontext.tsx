@@ -78,6 +78,16 @@ function calcAge(birthDate: string | null): number | null {
   return Math.floor(diffMs / (365.25 * 24 * 3600 * 1000));
 }
 
+function generateShortName(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0];
+  const lastName = parts[0];
+  const firstInitial = parts[1]?.[0] || '';
+  const middleInitial = parts[2]?.[0] || '';
+  if (middleInitial) return `${firstInitial}.${middleInitial}. ${lastName}`;
+  return `${firstInitial}. ${lastName}`;
+}
+
 function rowToAthlete(row: any): Athlete {
   return {
     id: row.id,
@@ -189,10 +199,23 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const addAthlete = async (input: NewAthleteInput) => {
     if (!coachProfile) return { error: 'Нет профиля тренера' };
+    if (!input.name.trim()) return { error: 'Укажите имя спортсмена' };
+
+    const { data: existing } = await supabase
+      .from('athletes')
+      .select('id')
+      .eq('coach_id', coachProfile.id)
+      .ilike('name', input.name.trim())
+      .maybeSingle();
+
+    if (existing) {
+      return { error: 'Спортсмен с таким именем уже существует' };
+    }
+
     const { error } = await supabase.from('athletes').insert({
       coach_id: coachProfile.id,
-      name: input.name,
-      name_short: input.nameShort || input.name,
+      name: input.name.trim(),
+      name_short: input.nameShort?.trim() || generateShortName(input.name),
       birth_date: input.birthDate || null,
       gender: input.gender,
       grade: input.grade || null,
@@ -206,6 +229,12 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const deleteAthlete = async (id: string) => {
+    const { error: resultsError } = await supabase
+      .from('results')
+      .delete()
+      .eq('athlete_id', id);
+    if (resultsError) return { error: resultsError.message };
+
     const { error } = await supabase.from('athletes').delete().eq('id', id);
     if (error) return { error: error.message };
     await refresh();

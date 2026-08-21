@@ -222,20 +222,22 @@ const worstEvent = scoredEvents.length > 0
             </span>
             <span style={{ fontSize: 16, color: '#6b7280' }}>очков</span>
           </div>
-          <div style={{ marginTop: 8, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-            <div style={{ fontSize: 12 }}>
-              <span style={{ color: '#6b7280' }}>Лучшая: </span>
-              <span style={{ color: LIME, fontWeight: 600 }}>{bestEvent.name}</span>
-              <span style={{ color: '#6b7280' }}> ({bestEvent.pts} pts)</span>
-            </div>
-            {worstEvent && (
-              <div style={{ fontSize: 12 }}>
-                <span style={{ color: '#6b7280' }}>Слабая: </span>
-                <span style={{ color: '#f87171', fontWeight: 600 }}>{worstEvent.name}</span>
-                <span style={{ color: '#6b7280' }}> ({worstEvent.pts} pts)</span>
-              </div>
-            )}
-          </div>
+         <div style={{ marginTop: 8, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+  {bestEvent && (
+    <div style={{ fontSize: 12 }}>
+      <span style={{ color: '#6b7280' }}>Лучшая: </span>
+      <span style={{ color: LIME, fontWeight: 600 }}>{bestEvent?.name}</span>
+      <span style={{ color: '#6b7280' }}> ({bestEvent?.pts} pts)</span>
+    </div>
+  )}
+  {worstEvent && (
+    <div style={{ fontSize: 12 }}>
+      <span style={{ color: '#6b7280' }}>Слабая: </span>
+      <span style={{ color: '#f87171', fontWeight: 600 }}>{worstEvent?.name}</span>
+      <span style={{ color: '#6b7280' }}> ({worstEvent?.pts} pts)</span>
+    </div>
+  )}
+</div>
         </div>
         <div style={{ width: 220 }}>
           <ResponsiveContainer width={220} height={180}>

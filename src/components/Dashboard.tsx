@@ -11,7 +11,10 @@ import {
 import { IconTrend } from "./Icons"
 import athleteImg from "@/imports/images-removebg-preview.png"
 import { useAthletes } from "../contexts/Athletescontext"
+import { useAuth } from "../contexts/AuthContext"
+import { supabase } from "../lib/supabaseClient"
 import { athleteTotalPoints, averageAge, resultsByMonth } from "../lib/Scoring"
+import { useState, useEffect } from "react"
 
 const LIME = "#c6f135"
 
@@ -30,8 +33,40 @@ function EmptyRow({ text }: { text: string }) {
   )
 }
 
+interface Competition {
+  id: string
+  name: string
+  date: string
+  location: string
+  level: 'regional' | 'national' | 'international'
+}
+
 export default function Dashboard() {
   const { athletes, results, loading } = useAthletes()
+  const { coachProfile } = useAuth()
+  const [upcomingComps, setUpcomingComps] = useState<Competition[]>([])
+
+  useEffect(() => {
+    if (!coachProfile) return
+    const fetchComps = async () => {
+      const today = new Date().toISOString().slice(0, 10)
+      const { data } = await supabase
+        .from('competitions')
+        .select('id, name, date, location, level')
+        .eq('coach_id', coachProfile.id)
+        .gte('date', today)
+        .order('date', { ascending: true })
+        .limit(3)
+      setUpcomingComps((data || []).map(c => ({
+        id: c.id,
+        name: c.name,
+        date: c.date,
+        location: c.location || '',
+        level: c.level,
+      })))
+    }
+    fetchComps()
+  }, [coachProfile])
 
   const activeCount = athletes.filter(a => a.status === "active").length
   const injuredAthletes = athletes.filter(a => a.status === "injured")
@@ -84,9 +119,14 @@ export default function Dashboard() {
     },
   ]
 
+  const levelColors: Record<string, string> = {
+    regional: '#60a5fa',
+    national: '#a78bfa',
+    international: '#c6f135',
+  }
+
   return (
     <div style={{ animation: "fadeIn 0.35s ease forwards" }}>
-      {/* Hero header with athlete */}
       <div
         style={{
           position: "relative",
@@ -185,7 +225,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* KPI Cards */}
       <div
         style={{
           display: "grid",
@@ -255,7 +294,6 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Main grid */}
       <div
         style={{
           display: "grid",
@@ -264,7 +302,6 @@ export default function Dashboard() {
           marginBottom: 16,
         }}
       >
-        {/* Activity chart */}
         <div
           style={{
             background: "rgba(15,17,23,0.8)",
@@ -352,7 +389,6 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Leaders */}
         <div
           style={{
             background: "rgba(15,17,23,0.8)",
@@ -429,11 +465,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Bottom grid */}
       <div
         style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}
       >
-        {/* Upcoming competitions — not yet backed by Supabase */}
         <div
           style={{
             background: "rgba(15,17,23,0.8)",
@@ -455,10 +489,27 @@ export default function Dashboard() {
           >
             БЛИЖАЙШИЕ СТАРТЫ
           </div>
-          <EmptyRow text="Раздел соревнований пока не подключён к базе" />
+          {upcomingComps.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {upcomingComps.map(c => (
+                <div key={c.id} style={{ padding: '10px 12px', background: 'rgba(20,23,32,0.5)', borderRadius: 8, border: '1px solid #1e2230' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f2f5' }}>{c.name}</div>
+                  <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{c.date} · {c.location}</div>
+                  <span style={{
+                    fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 700,
+                    background: `${levelColors[c.level]}18`,
+                    color: levelColors[c.level],
+                    textTransform: 'uppercase', letterSpacing: '0.06em',
+                    marginTop: 6, display: 'inline-block',
+                  }}>{c.level === 'regional' ? 'Регион' : c.level === 'national' ? 'Россия' : 'Международный'}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyRow text="Нет предстоящих соревнований" />
+          )}
         </div>
 
-        {/* Requires attention — real injured athletes */}
         <div
           style={{
             background: "rgba(15,17,23,0.8)",
@@ -506,7 +557,6 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Recent results */}
         <div
           style={{
             background: "rgba(15,17,23,0.8)",

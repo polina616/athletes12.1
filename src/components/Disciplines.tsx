@@ -1,6 +1,7 @@
 import { IconPlus, IconTrash } from './Icons';
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Discipline {
   id: string;
@@ -11,6 +12,7 @@ interface Discipline {
 }
 
 export default function Disciplines() {
+  const { coachProfile } = useAuth();
   const [disciplines, setDisciplines] = useState<Discipline[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -23,6 +25,7 @@ export default function Disciplines() {
     const { data, error } = await supabase
       .from('disciplines')
       .select('*')
+      .or(`is_default.eq.true${coachProfile ? `,coach_id.eq.${coachProfile.id}` : ''}`)
       .order('name');
     if (error) {
       console.error(error);
@@ -34,7 +37,7 @@ export default function Disciplines() {
 
   useEffect(() => {
     fetchDisciplines();
-  }, []);
+  }, [coachProfile]);
 
   const addDiscipline = async () => {
     if (!newName.trim() || !newUnit.trim()) return;
@@ -45,6 +48,7 @@ export default function Disciplines() {
         unit: newUnit.trim(),
         category: newCategory.trim() || null,
         is_default: false,
+        coach_id: coachProfile?.id || null,
       });
     if (error) {
       alert('Ошибка добавления: ' + error.message);
@@ -154,7 +158,6 @@ export default function Disciplines() {
         </div>
       )}
 
-      {/* Модалка добавления */}
       {showModal && (
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
