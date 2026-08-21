@@ -1,24 +1,25 @@
-import { Page } from '../types'; // <-- импорт
-import { IconDash, IconAthletes, IconCalendar, IconTrophy, IconChart, IconSettings, IconLogout, IconList } from './Icons';
-import React from 'react';
+import { IconDash, IconAthletes, IconCalendar, IconTrophy, IconChart, IconSettings, IconLogout, IconRun, IconBell } from './Icons'
+import athleteImg from '@/imports/images-removebg-preview.png'
+
+type Page = 'dashboard' | 'athletes' | 'training' | 'competitions' | 'analytics' | 'settings'
+
 interface SidebarProps {
-  current: Page; // используем общий тип
-  onNavigate: (p: Page) => void;
-  userName: string;
-  role: 'admin' | 'coach';
-  onLogout: () => void;
-  notifications?: number;
+  current: Page
+  onNavigate: (p: Page) => void
+  userName: string
+  role: 'admin' | 'coach'
+  onLogout: () => void
+  notifications?: number
 }
 
-const navItems: { id: Page; label: string; Icon: () => React.JSX.Element }[] = [
+const navItems: { id: Page; label: string; Icon: () => JSX.Element }[] = [
   { id: 'dashboard', label: 'Панель управления', Icon: IconDash },
   { id: 'athletes', label: 'Спортсмены', Icon: IconAthletes },
   { id: 'training', label: 'Тренировки', Icon: IconCalendar },
   { id: 'competitions', label: 'Соревнования', Icon: IconTrophy },
   { id: 'analytics', label: 'Аналитика', Icon: IconChart },
-  { id: 'disciplines', label: 'Дисциплины', Icon: IconList }, // новый пункт
   { id: 'settings', label: 'Настройки', Icon: IconSettings },
-];
+]
 
 export default function Sidebar({ current, onNavigate, userName, role, onLogout, notifications = 3 }: SidebarProps) {
   return (
@@ -58,6 +59,31 @@ export default function Sidebar({ current, onNavigate, userName, role, onLogout,
             <div style={{ fontSize: 9, color: '#6b7280', letterSpacing: '0.1em', textTransform: 'uppercase' }}>PRO SYSTEM</div>
           </div>
         </div>
+      </div>
+
+      {/* Athlete silhouette decoration */}
+      <div style={{ position: 'relative', height: 130, overflow: 'hidden', flexShrink: 0 }}>
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'linear-gradient(180deg, transparent 0%, rgba(198,241,53,0.04) 100%)',
+        }} />
+        <img
+          src={athleteImg}
+          alt=""
+          aria-hidden
+          style={{
+            position: 'absolute',
+            bottom: -10,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            height: 140,
+            width: 'auto',
+            filter: 'brightness(0) saturate(100%) invert(88%) sepia(60%) saturate(600%) hue-rotate(29deg) brightness(1.05)',
+            opacity: 0.18,
+            pointerEvents: 'none',
+            userSelect: 'none',
+          }}
+        />
       </div>
 
       {/* Nav */}
