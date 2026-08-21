@@ -1,30 +1,64 @@
 import { useState } from 'react'
+import { useAuth } from '../contexts/AuthContext'
 import athleteImg from '@/imports/images-removebg-preview.png'
 
-interface LoginProps {
-  onLogin: (role: 'admin' | 'coach', name: string) => void
+function getFriendlyErrorMessage(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err)
+
+  if (message.includes('Invalid login credentials')) {
+    return 'Неверный email или пароль'
+  }
+  if (message.includes('Email not confirmed')) {
+    return 'Email не подтверждён. Проверьте почту и перейдите по ссылке подтверждения.'
+  }
+  if (message.includes('User already registered')) {
+    return 'Пользователь с таким email уже зарегистрирован'
+  }
+  if (message.includes('Password should be at least')) {
+    return 'Пароль слишком короткий (минимум 6 символов)'
+  }
+  if (message.includes('rate limit') || message.includes('Too many requests')) {
+    return 'Слишком много попыток. Подождите немного и попробуйте снова.'
+  }
+  if (message.includes('signups are disabled') || message.includes('Signups not allowed')) {
+    return 'Регистрация новых пользователей временно отключена'
+  }
+  if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
+    return 'Не удалось подключиться к серверу. Проверьте интернет-соединение.'
+  }
+  return `Ошибка: ${message}`
 }
 
-export default function Login({ onLogin }: LoginProps) {
+export default function Login() {
+  const { signIn, signUp } = useAuth()
+
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [name, setName] = useState('')
   const [error, setError] = useState('')
+  const [info, setInfo] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
-    setTimeout(() => {
-      if (email === 'admin@sport.ru' && password === 'admin') {
-        onLogin('admin', 'Александр Белов')
-      } else if (email === 'coach@sport.ru' && password === 'coach') {
-        onLogin('coach', 'Сергей Морозов')
+    setInfo('')
+
+    try {
+      if (mode === 'signin') {
+        await signIn(email, password)
       } else {
-        setError('Неверный email или пароль')
-        setLoading(false)
+        await signUp(email, password, name)
+        setInfo('Регистрация прошла успешно! Проверьте почту, чтобы подтвердить email, затем войдите.')
+        setMode('signin')
       }
-    }, 600)
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err))
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -46,7 +80,6 @@ export default function Login({ onLogin }: LoginProps) {
         overflow: 'hidden',
         background: 'linear-gradient(135deg, #080a0f 0%, #0c1008 60%, #111a06 100%)',
       }}>
-        {/* Grid overlay */}
         <div style={{
           position: 'absolute', inset: 0,
           backgroundImage: 'linear-gradient(rgba(198,241,53,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(198,241,53,0.04) 1px, transparent 1px)',
@@ -54,7 +87,6 @@ export default function Login({ onLogin }: LoginProps) {
           pointerEvents: 'none',
         }} />
 
-        {/* Radial bloom */}
         <div style={{
           position: 'absolute',
           bottom: -60,
@@ -66,7 +98,6 @@ export default function Login({ onLogin }: LoginProps) {
           pointerEvents: 'none',
         }} />
 
-        {/* Horizontal speed lines */}
         {[...Array(5)].map((_, i) => (
           <div key={i} style={{
             position: 'absolute',
@@ -79,7 +110,6 @@ export default function Login({ onLogin }: LoginProps) {
           }} />
         ))}
 
-        {/* Athlete silhouette — lime-tinted */}
         <img
           src={athleteImg}
           alt="Бегун"
@@ -92,10 +122,8 @@ export default function Login({ onLogin }: LoginProps) {
             objectFit: 'contain',
             objectPosition: 'bottom center',
             marginBottom: 0,
-            /* Convert black silhouette → #c6f135 lime */
             filter:
               'brightness(0) saturate(100%) invert(88%) sepia(60%) saturate(600%) hue-rotate(29deg) brightness(1.05)',
-            /* Subtle drop-shadow in lime */
             // @ts-ignore
             WebkitFilter:
               'brightness(0) saturate(100%) invert(88%) sepia(60%) saturate(600%) hue-rotate(29deg) brightness(1.05)',
@@ -104,7 +132,6 @@ export default function Login({ onLogin }: LoginProps) {
           }}
         />
 
-        {/* Ground line */}
         <div style={{
           position: 'absolute',
           bottom: 0, left: 0, right: 0,
@@ -113,7 +140,6 @@ export default function Login({ onLogin }: LoginProps) {
           zIndex: 3,
         }} />
 
-        {/* Quote */}
         <div style={{
           position: 'absolute',
           top: 40,
@@ -159,7 +185,6 @@ export default function Login({ onLogin }: LoginProps) {
         position: 'relative',
         zIndex: 10,
       }}>
-        {/* Top accent line */}
         <div style={{
           position: 'absolute',
           top: 0, left: 0, right: 0,
@@ -178,7 +203,6 @@ export default function Login({ onLogin }: LoginProps) {
               boxShadow: '0 0 24px rgba(198,241,53,0.3)',
               flexShrink: 0,
             }}>
-              {/* mini runner icon */}
               <img
                 src={athleteImg}
                 alt=""
@@ -206,12 +230,43 @@ export default function Login({ onLogin }: LoginProps) {
             color: '#f0f2f5',
             margin: '0 0 4px',
             letterSpacing: '0.01em',
-          }}>Вход в систему</h2>
+          }}>{mode === 'signin' ? 'Вход в систему' : 'Регистрация тренера'}</h2>
           <p style={{ color: '#4b5563', fontSize: 13, margin: '0 0 28px', lineHeight: 1.5 }}>
-            Введите учётные данные для доступа к платформе
+            {mode === 'signin'
+              ? 'Введите учётные данные для доступа к платформе'
+              : 'Создайте аккаунт тренера, чтобы начать работу'}
           </p>
 
           <form onSubmit={handleSubmit}>
+            {mode === 'signup' && (
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: 'block', fontSize: 11, color: '#6b7280', marginBottom: 6, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                  Имя
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="Сергей Морозов"
+                  required
+                  style={{
+                    width: '100%', boxSizing: 'border-box',
+                    background: 'rgba(8,10,15,0.8)',
+                    border: '1px solid #1e2230',
+                    borderRadius: 8,
+                    padding: '12px 14px',
+                    color: '#f0f2f5',
+                    fontSize: 14,
+                    outline: 'none',
+                    transition: 'border-color 0.2s',
+                    fontFamily: "'Inter', sans-serif",
+                  }}
+                  onFocus={e => e.target.style.borderColor = 'rgba(198,241,53,0.5)'}
+                  onBlur={e => e.target.style.borderColor = '#1e2230'}
+                />
+              </div>
+            )}
+
             <div style={{ marginBottom: 14 }}>
               <label style={{ display: 'block', fontSize: 11, color: '#6b7280', marginBottom: 6, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                 Email
@@ -249,6 +304,7 @@ export default function Login({ onLogin }: LoginProps) {
                 onChange={e => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
+                minLength={6}
                 style={{
                   width: '100%', boxSizing: 'border-box',
                   background: 'rgba(8,10,15,0.8)',
@@ -275,6 +331,15 @@ export default function Login({ onLogin }: LoginProps) {
               }}>{error}</div>
             )}
 
+            {info && (
+              <div style={{
+                background: 'rgba(198,241,53,0.08)',
+                border: '1px solid rgba(198,241,53,0.25)',
+                borderRadius: 8, padding: '10px 14px',
+                color: '#c6f135', fontSize: 13, marginBottom: 16,
+              }}>{info}</div>
+            )}
+
             <button
               type="submit"
               disabled={loading}
@@ -292,16 +357,30 @@ export default function Login({ onLogin }: LoginProps) {
                 boxShadow: loading ? 'none' : '0 0 24px rgba(198,241,53,0.25)',
               }}
             >
-              {loading ? 'Вход...' : 'Войти в систему'}
+              {loading ? 'Подождите...' : mode === 'signin' ? 'Войти в систему' : 'Зарегистрироваться'}
             </button>
           </form>
 
-          <div style={{ marginTop: 20, padding: '12px 14px', background: 'rgba(198,241,53,0.04)', borderRadius: 8, border: '1px solid rgba(198,241,53,0.08)' }}>
-            <p style={{ fontSize: 11, color: '#4b5563', margin: 0, lineHeight: 1.7 }}>
-              <strong style={{ color: '#6b7280' }}>Тренер:</strong> coach@sport.ru / coach<br />
-              <strong style={{ color: '#6b7280' }}>Администратор:</strong> admin@sport.ru / admin
-            </p>
-          </div>
+          <button
+            type="button"
+            onClick={() => { setMode(m => m === 'signin' ? 'signup' : 'signin'); setError(''); setInfo('') }}
+            style={{
+              width: '100%',
+              marginTop: 16,
+              background: 'transparent',
+              border: 'none',
+              color: '#6b7280',
+              fontSize: 13,
+              cursor: 'pointer',
+              fontFamily: "'Inter', sans-serif",
+              padding: '8px',
+              transition: 'color 0.15s',
+            }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#c6f135'}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#6b7280'}
+          >
+            {mode === 'signin' ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти'}
+          </button>
         </div>
       </div>
     </div>
