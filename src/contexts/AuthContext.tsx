@@ -20,17 +20,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [coachProfile, setCoachProfile] = useState<AuthContextType['coachProfile']>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchCoachProfile = async (userId: string) => {
+  const fetchCoachProfile = async (
+    userId: string,
+    fallbackName?: string,
+    fallbackEmail?: string
+  ) => {
     const { data, error } = await supabase
       .from('coaches')
       .select('id, name, email')
       .eq('auth_user_id', userId)
-      .single();
+      .maybeSingle();
+
     if (error) {
       console.error('Ошибка загрузки профиля тренера:', error);
       return null;
     }
-    return data;
+
+    if (data) return data;
+
+    // Профиля ещё нет (например, пользователь был создан не через signUp) —
+    // создаём запись, чтобы не застревать на экране входа.
+    const { data: created, error: insertError } = await supabase
+      .from('coaches')
+      .insert({
+        auth_user_id: userId,
+        name: fallbackName ?? 'Тренер',
+        email: fallbackEmail ?? '',
+      })
+      .select('id, name, email')
+      .single();
+
+    if (insertError) {
+      console.error('Не удалось создать профиль тренера:', insertError);
+      return null;
+    }
+
+    return created;
   };
 
   useEffect(() => {
@@ -38,7 +63,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchCoachProfile(session.user.id).then(profile => setCoachProfile(profile));
+        fetchCoachProfile(
+          session.user.id,
+          session.user.user_metadata?.name,
+          session.user.email
+        ).then(profile => setCoachProfile(profile));
       }
       setLoading(false);
     });
@@ -47,7 +76,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchCoachProfile(session.user.id).then(profile => setCoachProfile(profile));
+        fetchCoachProfile(
+          session.user.id,
+          session.user.user_metadata?.name,
+          session.user.email
+        ).then(profile => setCoachProfile(profile));
       } else {
         setCoachProfile(null);
       }
