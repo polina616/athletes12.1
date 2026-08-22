@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from './AuthContext';
-
+import { disciplineMeta } from '../lib/controlEventUtils'; 
 export interface Athlete {
   id: string;
   name: string;
@@ -28,26 +28,37 @@ export interface Athlete {
   status: 'active' | 'injured' | 'inactive';
   photo: string;
   specialization: 'decathlon' | 'heptathlon' | 'sprints' | 'jumps' | 'throws' | 'distance';
+   createdAt: string; 
 }
 
 export interface Result {
   id: string;
   athleteId: string;
   date: string;
-  discipline: string;
-  result: string;
+  disciplineId: string;
+  discipline: string;   // имя дисциплины, подтягивается через join с disciplines
+  result: string;       // = result_display в БД
   resultValue: number;
-  unit: string;
+  unit: string;         // подтягивается через join с disciplines
   location: string;
   type: 'training' | 'test';
   wind?: number;
-  surface?: string;
-  shoes?: string;
   comment?: string;
-  weather?: string;
-  feeling?: number;
-  rpe?: number;
-  controlEventId?: string; 
+  controlEventId?: string;
+}
+
+// Отдельный тип для вставки — не путать с Result (там id/discipline вычисляются)
+export interface NewResultInput {
+  athleteId: string;
+  date: string;
+  discipline: string;    // имя дисциплины (строка)
+  result: string;
+  resultValue: number;
+  location?: string;
+  type: 'training' | 'test';
+  wind?: number;
+  comment?: string;
+  controlEventId?: string;
 }
 
 export interface Injury {
@@ -92,7 +103,7 @@ interface AthletesContextType {
   addInjury: (athleteId: string, data: { name: string; dateInjured: string; dateHealed?: string; description?: string }) => Promise<{ error: string | null }>;
   updateInjury: (id: string, data: Partial<{ name: string; dateInjured: string; dateHealed: string; description: string; status: 'active' | 'healed' }>) => Promise<{ error: string | null }>;
   deleteInjury: (id: string) => Promise<{ error: string | null }>;
-  addResult: (input: Omit<Result, 'id'>) => Promise<{ error: string | null }>;
+  addResult: (input: NewResultInput) => Promise<{ error: string | null }>;
   deleteResult: (id: string) => Promise<{ error: string | null }>;
 }
 
@@ -168,6 +179,7 @@ function rowToAthlete(row: any): Athlete {
     status: row.status || 'active',
     photo: row.photo_url || '',
     specialization: row.specialization || 'decathlon',
+    createdAt: row.created_at || '', 
   };
 }
 
@@ -176,25 +188,21 @@ function rowToResult(row: any): Result {
     id: row.id,
     athleteId: row.athlete_id,
     date: row.date,
-    discipline: row.discipline,
-    result: row.result,
+    disciplineId: row.discipline_id,
+    discipline: row.disciplines?.name || '—',
+    result: row.result_display,
     resultValue: Number(row.result_value),
-    unit: row.unit,
+    unit: row.disciplines?.unit || '',
     location: row.location || '',
     type: row.type,
     wind: row.wind ?? undefined,
-    surface: row.surface ?? undefined,
-    shoes: row.shoes ?? undefined,
     comment: row.comment ?? undefined,
-    weather: row.weather ?? undefined,
-    feeling: row.feeling ?? undefined,
-    rpe: row.rpe ?? undefined,
     controlEventId: row.control_event_id ?? undefined,
   };
 }
 
 export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { coachProfile } = useAuth();
+  const { coachProfile, user } = useAuth();
   const [athletes, setAthletes] = useState<Athlete[]>([]);
   const [results, setResults] = useState<Result[]>([]);
   const [injuries, setInjuries] = useState<Injury[]>([]);
@@ -238,7 +246,7 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     const { data: resultRows, error: resultError } = await supabase
       .from('results')
-      .select('*')
+      .select('*, disciplines(name, unit)')
       .in('athlete_id', athleteIds)
       .order('date', { ascending: true });
 
@@ -469,25 +477,58 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await refresh();
     return { error: null };
   };
-  const addResult = async (input: Omit<Result, 'id'>) => {
+ const addResult = async (input: NewResultInput) => {
+  if (!coachProfile?.id || !user?.id) return { error: 'Нет профиля тренера' };
+
+  // 1. Найти существующую дисциплину по имени
+  const { data: existingDiscipline, error: findError } = await supabase
+    .from('disciplines')
+    .select('id')
+    .or(`is_default.eq.true,coach_id.eq.${coachProfile.id}`)
+    .eq('name', input.discipline)
+    .maybeSingle();
+
+  if (findError) {
+    console.error('Ошибка поиска дисциплины:', findError);
+    return { error: getFriendlySupabaseError(findError) };
+  }
+
+  let disciplineId = existingDiscipline?.id as string | undefined;
+
+  if (!disciplineId) {
+    const { data: newDiscipline, error: createError } = await supabase
+      .from('disciplines')
+      .insert({
+        name: input.discipline,
+        unit: disciplineMeta(input.discipline).unit,
+        is_default: false,
+        coach_id: coachProfile.id,   // disciplines.coach_id по-прежнему ссылается на coaches — не трогаем
+      })
+      .select('id')
+      .single();
+
+    if (createError) {
+      console.error('Ошибка создания дисциплины:', createError);
+      return { error: getFriendlySupabaseError(createError) };
+    }
+    disciplineId = newDiscipline.id;
+  }
+
+  // 2. Вставляем результат: coach_id теперь ссылается на profiles → пишем user.id (auth.uid())
   const { error } = await supabase.from('results').insert({
+    coach_id: user.id,          // ← было coachProfile.id
     athlete_id: input.athleteId,
+    discipline_id: disciplineId,
     date: input.date,
-    discipline: input.discipline,
-    result: input.result,
     result_value: input.resultValue,
-    unit: input.unit,
+    result_display: input.result,
     location: input.location || null,
     type: input.type,
     wind: input.wind ?? null,
-    surface: input.surface ?? null,
-    shoes: input.shoes ?? null,
     comment: input.comment ?? null,
-    weather: input.weather ?? null,
-    feeling: input.feeling ?? null,
-    rpe: input.rpe ?? null,
     control_event_id: input.controlEventId ?? null,
   });
+
   if (error) {
     console.error('Ошибка добавления результата:', error);
     return { error: getFriendlySupabaseError(error) };

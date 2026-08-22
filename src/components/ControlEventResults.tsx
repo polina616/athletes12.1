@@ -79,7 +79,6 @@ export default function ControlEventResults({ event, onClose }: { event: Control
       discipline,
       result: raw.trim(),
       resultValue: value,
-      unit: disciplineMeta(discipline).unit,
       location: event.name,
       type: 'test',
       controlEventId: event.id,

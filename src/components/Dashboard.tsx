@@ -13,7 +13,7 @@ import athleteImg from "@/imports/images-removebg-preview.png"
 import { useAthletes } from "../contexts/Athletescontext"
 import { useAuth } from "../contexts/AuthContext"
 import { supabase } from "../lib/supabaseClient"
-import { athleteTotalPoints, averageAge, resultsByMonth } from "../lib/Scoring"
+import { athleteTotalPoints, averageAge, resultsByMonth, teamPointsTrend, teamPointsDelta, progressLeaders, decliningAthletes } from "../lib/Scoring"
 import { useState, useEffect } from "react"
 
 const LIME = "#c6f135"
@@ -84,6 +84,43 @@ useEffect(() => {
       ? Math.round(scored.reduce((s, x) => s + x.pts, 0) / scored.length)
       : null
 
+      const trend = teamPointsTrend(athletes, results)
+const pointsDelta = teamPointsDelta(trend)
+const progressList = progressLeaders(athletes, results, 4)
+const declineList = decliningAthletes(athletes, results, 3)
+
+const now = new Date()
+const newAthletesThisMonth = athletes.filter(a => {
+  if (!a.createdAt) return false
+  const d = new Date(a.createdAt)
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
+}).length
+
+const [monthlyTrainings, setMonthlyTrainings] = useState<{ count: number; avgAttendance: number }>({ count: 0, avgAttendance: 0 })
+
+useEffect(() => {
+  if (!coachProfile) return
+  const fetchMonthlyTrainings = async () => {
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+    const { data, error } = await supabase
+      .from('trainings')
+      .select('id, athlete_ids, attended_ids')
+      .eq('coach_id', coachProfile.id)
+      .gte('date', monthStart)
+    if (error) {
+      console.error('Ошибка загрузки тренировок:', error)
+      setMonthlyTrainings({ count: 0, avgAttendance: 0 })
+      return
+    }
+    const rows = data || []
+    const avg = rows.length > 0
+      ? Math.round(rows.reduce((s, t) => s + ((t.attended_ids?.length || 0) / Math.max(1, t.athlete_ids?.length || 1) * 100), 0) / rows.length)
+      : 0
+    setMonthlyTrainings({ count: rows.length, avgAttendance: avg })
+  }
+  fetchMonthlyTrainings()
+}, [coachProfile])
+
   const leaders = [...scored].sort((a, b) => b.pts - a.pts).slice(0, 4)
 
   const recentResults = [...results]
@@ -93,35 +130,37 @@ useEffect(() => {
   const activity = resultsByMonth(results)
 
   const kpiCards = [
-    {
-      label: "Спортсменов",
-      value: String(athletes.length),
-      sub: `${activeCount} активных`,
-      up: null as boolean | null,
-      accent: "#c6f135",
-    },
-    {
-      label: "Средний возраст",
-      value: avgAge !== null ? String(avgAge) : "—",
-      sub: "лет",
-      up: null,
-      accent: "#60a5fa",
-    },
-    {
-      label: "Средние очки",
-      value: avgPoints !== null ? avgPoints.toLocaleString("ru") : "—",
-      sub: scored.length > 0 ? "по многоборью" : "нет данных",
-      up: null,
-      accent: "#a78bfa",
-    },
-    {
-      label: "Результатов внесено",
-      value: String(results.length),
-      sub: "тестов и стартов",
-      up: null,
-      accent: "#fbbf24",
-    },
-  ]
+  {
+    label: "Спортсменов",
+    value: String(athletes.length),
+    sub: newAthletesThisMonth > 0 ? `+${newAthletesThisMonth} за месяц` : `${activeCount} активных`,
+    up: newAthletesThisMonth > 0 ? true : null,
+    accent: "#c6f135",
+  },
+  {
+    label: "Средний возраст",
+    value: avgAge !== null ? String(avgAge) : "—",
+    sub: "лет",
+    up: null,
+    accent: "#60a5fa",
+  },
+  {
+    label: "Средние очки",
+    value: avgPoints !== null ? avgPoints.toLocaleString("ru") : "—",
+    sub: pointsDelta
+      ? `${pointsDelta.up ? "+" : ""}${pointsDelta.percent}% к прошлому месяцу`
+      : (scored.length > 0 ? "по многоборью" : "нет данных"),
+    up: pointsDelta ? pointsDelta.up : null,
+    accent: "#a78bfa",
+  },
+  {
+    label: "Тренировок / мес",
+    value: String(monthlyTrainings.count),
+    sub: monthlyTrainings.count > 0 ? `${monthlyTrainings.avgAttendance}% посещаемость` : "нет тренировок",
+    up: null,
+    accent: "#fbbf24",
+  },
+]
 
   return (
     <div style={{ animation: "fadeIn 0.35s ease forwards" }}>
@@ -318,73 +357,30 @@ useEffect(() => {
             }}
           >
             <div>
-              <div
-                style={{
-                  fontFamily: "'Barlow Condensed', sans-serif",
-                  fontSize: 18,
-                  fontWeight: 700,
-                  color: "#f0f2f5",
-                  letterSpacing: "0.02em",
-                }}
-              >
-                АКТИВНОСТЬ РЕЗУЛЬТАТОВ
-              </div>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>
-                Количество внесённых результатов по месяцам
-              </div>
-            </div>
-          </div>
-          {activity.length > 0 ? (
-            <ResponsiveContainer width="100%" height={180}>
-              <AreaChart data={activity}>
-                <defs>
-                  <linearGradient id="lime" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#c6f135" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#c6f135" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis
-                  dataKey="month"
-                  tick={{ fill: "#6b7280", fontSize: 11, fontFamily: "Inter" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  allowDecimals={false}
-                  tick={{
-                    fill: "#6b7280",
-                    fontSize: 11,
-                    fontFamily: "'JetBrains Mono'",
-                  }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={30}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: "#141720",
-                    border: "1px solid #1e2230",
-                    borderRadius: 8,
-                    color: "#f0f2f5",
-                    fontSize: 12,
-                  }}
-                  labelStyle={{ color: "#9ca3af" }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="count"
-                  name="Результатов"
-                  stroke={LIME}
-                  strokeWidth={2}
-                  fill="url(#lime)"
-                  dot={{ fill: LIME, r: 3 }}
-                  activeDot={{ r: 5 }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          ) : (
-            <EmptyRow text="Пока нет внесённых результатов" />
-          )}
+              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, color: "#f0f2f5", letterSpacing: "0.04em", marginBottom: 16 }}>
+  ЛИДЕРЫ ПРОГРЕССА
+</div>
+{progressList.length > 0 ? (
+  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    {progressList.map((p, i) => (
+      <div key={p.athlete.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: "rgba(20,23,32,0.6)", borderRadius: 8, border: "1px solid #1e2230" }}>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: i === 0 ? LIME : "#6b7280", fontWeight: 600, width: 18 }}>
+          #{i + 1}
+        </span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#f0f2f5" }}>{p.athlete.nameShort || p.athlete.name}</div>
+          <div style={{ fontSize: 11, color: "#6b7280" }}>{p.event}</div>
+        </div>
+        <div style={{ fontSize: 11, color: LIME, display: "flex", alignItems: "center", gap: 3 }}>
+          <IconTrend up={true} />
+          {p.deltaLabel}
+        </div>
+      </div>
+    ))}
+  </div>
+) : (
+  <EmptyRow text="Пока недостаточно данных для оценки прогресса" />
+)}
         </div>
 
         <div
@@ -515,30 +511,30 @@ useEffect(() => {
           >
             ТРЕБУЮТ ВНИМАНИЯ
           </div>
-          {injuredAthletes.length > 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {injuredAthletes.map((a) => (
-                <div
-                  key={a.id}
-                  style={{
-                    padding: "12px",
-                    background: "rgba(248,113,113,0.04)",
-                    borderRadius: 8,
-                    border: "1px solid rgba(248,113,113,0.15)",
-                  }}
-                >
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#f0f2f5" }}>
-                    {a.name}
-                  </div>
-                  <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>
-                    Травма{a.medicalNotes ? ` · ${a.medicalNotes}` : ""}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyRow text="Все спортсмены допущены к тренировкам" />
-          )}
+          {(injuredAthletes.length > 0 || declineList.length > 0) ? (
+  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    {injuredAthletes.map((a) => (
+      <div key={a.id} style={{ padding: "12px", background: "rgba(248,113,113,0.04)", borderRadius: 8, border: "1px solid rgba(248,113,113,0.15)" }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#f0f2f5" }}>{a.name}</div>
+        <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>Травма{a.medicalNotes ? ` · ${a.medicalNotes}` : ""}</div>
+      </div>
+    ))}
+    {declineList.map((d, i) => (
+      <div key={`${d.athlete.id}-${i}`} style={{ padding: "12px", background: "rgba(251,191,36,0.04)", borderRadius: 8, border: "1px solid rgba(251,191,36,0.15)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "#f0f2f5" }}>{d.athlete.nameShort || d.athlete.name}</span>
+          <span style={{ fontSize: 11, color: "#fbbf24", display: "flex", alignItems: "center", gap: 3 }}>
+            <IconTrend up={false} />
+            {d.deltaLabel}
+          </span>
+        </div>
+        <div style={{ fontSize: 11, color: "#6b7280" }}>{d.discipline} · ухудшение результата</div>
+      </div>
+    ))}
+  </div>
+) : (
+  <EmptyRow text="Все спортсмены допущены и показывают стабильный результат" />
+)}
         </div>
 
         <div

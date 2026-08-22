@@ -3,6 +3,8 @@ import { IconPlus } from './Icons'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import Modal from './Modal';
+import { useAthletes } from '../contexts/Athletescontext'
+import ControlEventResults from './ControlEventResults'
 
 const LIME = '#c6f135'
 
@@ -49,6 +51,8 @@ export default function ControlEvents() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const { results } = useAthletes()
+  const [resultsEventId, setResultsEventId] = useState<string | null>(null)
 
   const [form, setForm] = useState({
     name: 'День зачет',
@@ -192,24 +196,31 @@ export default function ControlEvents() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: '#6b7280', background: '#1a1d26', padding: '3px 10px', borderRadius: 999 }}>
-            {evt.disciplines.length} дисциплин
-          </span>
-          <button
-            onClick={(e) => { e.stopPropagation(); handleDelete(evt.id) }}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#6b7280',
-              cursor: 'pointer',
-              fontSize: 12,
-              padding: 4,
-            }}
-            title="Удалить"
-          >
-            ✕
-          </button>
-        </div>
+  {(() => {
+    const filled = results.filter(r => r.controlEventId === evt.id).length
+    return (
+      <span style={{ fontSize: 11, color: filled > 0 ? LIME : '#6b7280', background: '#1a1d26', padding: '3px 10px', borderRadius: 999 }}>
+        {filled > 0 ? `${filled} результатов` : `${evt.disciplines.length} дисциплин`}
+      </span>
+    )
+  })()}
+  <button
+    onClick={(e) => { e.stopPropagation(); setResultsEventId(evt.id) }}
+    style={{
+      background: 'rgba(198,241,53,0.08)', border: '1px solid rgba(198,241,53,0.2)',
+      color: LIME, borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontWeight: 600,
+    }}
+  >
+    Внести результаты
+  </button>
+  <button
+    onClick={(e) => { e.stopPropagation(); handleDelete(evt.id) }}
+    style={{ background: 'transparent', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: 12, padding: 4 }}
+    title="Удалить"
+  >
+    ✕
+  </button>
+</div>
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {evt.disciplines.map(d => (
@@ -432,6 +443,15 @@ export default function ControlEvents() {
             </div>
          </Modal>
         )}
+        {resultsEventId && (
+  <ControlEventResults
+    event={{
+      ...events.find(e => e.id === resultsEventId)!,
+      athleteIds: [], // если поле athleteIds ещё не добавлено в интерфейс/БД — временно пустой массив, см. ниже
+    }}
+    onClose={() => setResultsEventId(null)}
+  />
+)}
     </div>
   )
 }
