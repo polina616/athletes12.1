@@ -1,14 +1,23 @@
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useAthletes } from '../contexts/Athletescontext'
-import { athleteTotalPoints, resultsByMonth } from '../lib/Scoring'
+import { athleteTotalPoints, resultsByMonth, teamPointsTrend, progressLeaders, decliningAthletes } from '../lib/Scoring'
+import { IconTrend } from './Icons'
 
 const LIME = '#c6f135'
 
 function EmptyBlock({ text }: { text: string }) {
   return (
     <div style={{ padding: '40px 12px', textAlign: 'center', color: '#4b5563', fontSize: 13 }}>
+      {text}
+    </div>
+  )
+}
+
+function EmptyRow({ text }: { text: string }) {
+  return (
+    <div style={{ padding: '16px 12px', textAlign: 'center', color: '#4b5563', fontSize: 12 }}>
       {text}
     </div>
   )
@@ -47,6 +56,11 @@ export default function Analytics() {
     .map(([discipline, count]) => ({ discipline, count }))
 
   const activity = resultsByMonth(results)
+
+  // Team progress over time + individual progress/decline leaders
+  const trend = teamPointsTrend(athletes, results)
+  const progressList = progressLeaders(athletes, results, 5)
+  const declineList = decliningAthletes(athletes, results, 5)
 
   return (
     <div style={{ animation: 'fadeIn 0.35s ease forwards' }}>
@@ -94,6 +108,73 @@ export default function Analytics() {
         ) : (
           <EmptyBlock text="Пока нет внесённых результатов" />
         )}
+      </div>
+
+      {/* Team progress trend */}
+      <div style={{ background: 'rgba(15,17,23,0.8)', border: '1px solid #1e2230', borderRadius: 12, padding: '20px', backdropFilter: 'blur(12px)', marginBottom: 16 }}>
+        <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, color: '#f0f2f5', letterSpacing: '0.04em', marginBottom: 16 }}>ПРОГРЕСС КОМАНДЫ</div>
+        {trend.length > 1 ? (
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={trend}>
+              <XAxis dataKey="month" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis allowDecimals={false} tick={{ fill: '#6b7280', fontSize: 10, fontFamily: "'JetBrains Mono'" }} axisLine={false} tickLine={false} width={40} />
+              <Tooltip contentStyle={{ background: '#141720', border: '1px solid #1e2230', borderRadius: 8, fontSize: 12 }} />
+              <Line type="monotone" dataKey="avg" name="Средние очки" stroke={LIME} strokeWidth={2} dot={{ fill: LIME, r: 3 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <EmptyBlock text="Недостаточно данных для графика прогресса команды" />
+        )}
+      </div>
+
+      {/* Progress leaders & declining athletes */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+        <div style={{ background: 'rgba(15,17,23,0.8)', border: '1px solid #1e2230', borderRadius: 12, padding: '20px', backdropFilter: 'blur(12px)' }}>
+          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, color: '#f0f2f5', letterSpacing: '0.04em', marginBottom: 16 }}>ЛИДЕРЫ ПРОГРЕССА</div>
+          {progressList.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {progressList.map((p, i) => (
+                <div key={p.athlete.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: 'rgba(20,23,32,0.6)', borderRadius: 8, border: '1px solid #1e2230' }}>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: i === 0 ? LIME : '#6b7280', fontWeight: 600, width: 18 }}>
+                    #{i + 1}
+                  </span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f2f5' }}>{p.athlete.nameShort || p.athlete.name}</div>
+                    <div style={{ fontSize: 11, color: '#6b7280' }}>{p.event}</div>
+                  </div>
+                  <div style={{ fontSize: 11, color: LIME, display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <IconTrend up={true} />
+                    {p.deltaLabel}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyRow text="Пока недостаточно данных для оценки прогресса" />
+          )}
+        </div>
+
+        <div style={{ background: 'rgba(15,17,23,0.8)', border: '1px solid #1e2230', borderRadius: 12, padding: '20px', backdropFilter: 'blur(12px)' }}>
+          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, color: '#f0f2f5', letterSpacing: '0.04em', marginBottom: 16 }}>ТРЕБУЮТ ВНИМАНИЯ</div>
+          {declineList.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {declineList.map((d, i) => (
+                <div key={`${d.athlete.id}-${i}`} style={{ padding: '12px', background: 'rgba(251,191,36,0.04)', borderRadius: 8, border: '1px solid rgba(251,191,36,0.15)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#f0f2f5' }}>{d.athlete.nameShort || d.athlete.name}</span>
+                    <span style={{ fontSize: 11, color: '#fbbf24', display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <IconTrend up={false} />
+                      {d.deltaLabel}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#6b7280' }}>{d.discipline} · ухудшение результата</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyRow text="Ухудшений результатов не выявлено" />
+          )}
+        </div>
       </div>
 
       {/* Volume by discipline */}
