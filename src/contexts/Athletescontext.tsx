@@ -95,6 +95,31 @@ interface AthletesContextType {
 
 const AthletesContext = createContext<AthletesContextType | undefined>(undefined);
 
+/**
+ * Переводит частые технические ошибки Supabase/сети в понятные пользователю сообщения.
+ * Используется во всех местах, где мы показываем error.message напрямую.
+ */
+export function getFriendlySupabaseError(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+
+  if (message.includes('Load failed') || message.includes('Failed to fetch') || message.includes('NetworkError')) {
+    return 'Не удалось подключиться к серверу. Проверьте интернет-соединение и повторите попытку.';
+  }
+  if (message.includes('duplicate key') || message.includes('already exists')) {
+    return 'Такая запись уже существует.';
+  }
+  if (message.includes('violates foreign key constraint')) {
+    return 'Невозможно выполнить действие: есть связанные данные (результаты, травмы и т.п.).';
+  }
+  if (message.includes('violates row-level security') || message.includes('RLS')) {
+    return 'Недостаточно прав для этого действия.';
+  }
+  if (message.includes('JWT') || message.includes('expired')) {
+    return 'Сессия истекла. Пожалуйста, войдите заново.';
+  }
+  return message;
+}
+
 function calcAge(birthDate: string | null): number | null {
   if (!birthDate) return null;
   const b = new Date(birthDate);
@@ -188,7 +213,7 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       .order('created_at', { ascending: true });
 
     if (athleteError) {
-      console.error('Ошибка загрузки спортсменов:', athleteError);
+      console.error('Ошибка загрузки спортсменов:', getFriendlySupabaseError(athleteError));
       setAthletes([]);
       setResults([]);
       setInjuries([]);
@@ -214,7 +239,7 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       .order('date', { ascending: true });
 
     if (resultError) {
-      console.error('Ошибка загрузки результатов:', resultError);
+      console.error('Ошибка загрузки результатов:', getFriendlySupabaseError(resultError));
       setResults([]);
     } else {
       setResults((resultRows || []).map(rowToResult));
@@ -227,7 +252,7 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       .order('date_injured', { ascending: false });
 
     if (injuryError) {
-      console.error('Ошибка загрузки травм:', injuryError);
+      console.error('Ошибка загрузки травм:', getFriendlySupabaseError(injuryError));
       setInjuries([]);
     } else {
       setInjuries((injuryRows || []).map((row: any) => ({
@@ -295,7 +320,7 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
     if (error) {
       console.error('Ошибка добавления спортсмена:', error);
-      return { error: error.message };
+      return { error: getFriendlySupabaseError(error) };
     }
     await refresh();
     return { error: null };
@@ -340,7 +365,7 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     if (error) {
       console.error('Ошибка обновления спортсмена:', error);
-      return { error: error.message };
+      return { error: getFriendlySupabaseError(error) };
     }
     await refresh();
     return { error: null };
@@ -349,18 +374,26 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const deleteAthlete = async (id: string) => {
     if (!coachProfile?.id) return { error: 'Нет профиля тренера' };
 
+    // Порядок важен: сначала дочерние записи (результаты, травмы),
+    // потом сам спортсмен — иначе упадём на FK-ограничении.
     const { error: resultsError } = await supabase
       .from('results')
       .delete()
       .eq('athlete_id', id);
-    if (resultsError) return { error: resultsError.message };
+    if (resultsError) return { error: getFriendlySupabaseError(resultsError) };
+
+    const { error: injuriesError } = await supabase
+      .from('injuries')
+      .delete()
+      .eq('athlete_id', id);
+    if (injuriesError) return { error: getFriendlySupabaseError(injuriesError) };
 
     const { error } = await supabase
       .from('athletes')
       .delete()
       .eq('id', id)
       .eq('coach_id', coachProfile.id);
-    if (error) return { error: error.message };
+    if (error) return { error: getFriendlySupabaseError(error) };
 
     await refresh();
     return { error: null };
@@ -390,7 +423,7 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       description: data.description?.trim() || null,
       status: data.dateHealed ? 'healed' : 'active',
     });
-    if (error) return { error: error.message };
+    if (error) return { error: getFriendlySupabaseError(error) };
     if (!data.dateHealed) {
       await syncAthleteStatus(athleteId);
     }
@@ -410,7 +443,7 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const athleteId = existing?.athlete_id;
 
     const { error } = await supabase.from('injuries').update(updateData).eq('id', id);
-    if (error) return { error: error.message };
+    if (error) return { error: getFriendlySupabaseError(error) };
 
     if (athleteId) {
       await syncAthleteStatus(athleteId);
@@ -424,7 +457,7 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const athleteId = existing?.athlete_id;
 
     const { error } = await supabase.from('injuries').delete().eq('id', id);
-    if (error) return { error: error.message };
+    if (error) return { error: getFriendlySupabaseError(error) };
 
     if (athleteId) {
       await syncAthleteStatus(athleteId);

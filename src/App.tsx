@@ -36,6 +36,18 @@ function LoadingScreen() {
   );
 }
 
+// Справочник стилей/подписей по роли. Вынесен из JSX намеренно:
+// прямое сравнение `role === 'admin'` при role: 'admin' | 'coach' = 'coach'
+// TypeScript сужает до литерала 'coach' и ругается TS2367 (сравнение
+// заведомо ложное с точки зрения типов). Через объект-справочник эта
+// проблема не возникает в принципе, а не просто подавляется.
+type Role = 'admin' | 'coach';
+
+const ROLE_META: Record<Role, { bg: string; color: string; label: string; sidebarLabel: string }> = {
+  admin: { bg: 'rgba(248,113,113,0.12)', color: '#f87171', label: 'Админ', sidebarLabel: 'Администратор' },
+  coach: { bg: 'rgba(198,241,53,0.1)', color: '#c6f135', label: 'Тренер', sidebarLabel: 'Тренер' },
+};
+
 export default function App() {
   const { user, coachProfile, loading, signOut } = useAuth();
 
@@ -47,7 +59,13 @@ export default function App() {
     return <Login />;
   }
 
-  const role: 'admin' | 'coach' = 'coach';
+  // Единственный источник правды по роли пользователя.
+  // Пока в проекте нет отдельной таблицы/поля с ролью — все залогиненные это тренеры.
+  // Когда появится роль администратора в БД (например, coachProfile.role),
+  // заменить строку ниже на реальное вычисление роли — весь остальной код
+  // (ROLE_META, JSX) менять не придётся.
+  const role: Role = 'coach';
+  const roleMeta = ROLE_META[role];
   const displayName = coachProfile.name;
 
   return (
@@ -156,12 +174,12 @@ export default function App() {
               fontSize: 9,
               padding: '2px 6px',
               borderRadius: 3,
-              background: user.role === 'admin' ? 'rgba(248,113,113,0.12)' : 'rgba(198,241,53,0.1)',
-              color: user.role === 'admin' ? '#f87171' : '#c6f135',
+              background: roleMeta.bg,
+              color: roleMeta.color,
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
               fontWeight: 700,
-            }}>{user.role === 'admin' ? 'Админ' : 'Тренер'}</span>
+            }}>{roleMeta.label}</span>
           </div>
         </header>
 
@@ -173,9 +191,11 @@ export default function App() {
             <Route path="/athlete/:id" element={<AthleteProfile />} />
             <Route path="/training" element={<Training />} />
             <Route path="/control-events" element={<ControlEvents />} />
+            <Route path="/competitions" element={<Competitions />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/disciplines" element={<Disciplines />} />
             <Route path="/settings" element={<SettingsPlaceholder />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </div>
       </main>

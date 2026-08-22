@@ -1,74 +1,8 @@
-export interface Athlete {
-  id: string
-  name: string
-  nameShort: string
-  birthDate: string
-  age: number
-  gender: 'M' | 'F'
-  height: number
-  weight: number
-  armSpan: number
-  legLength: number
-  shoeSize: number
-  phone: string
-  parents: string
-  parentPhone: string
-  medicalNotes: string
-  allergies: string
-  grade: string
-  group: string
-  trainingStart: string
-  favoriteEvent: string
-  goals: string
-  coachComment: string
-  status: 'active' | 'injured' | 'inactive'
-  photo: string
-  specialization: 'decathlon' | 'heptathlon' | 'sprints' | 'jumps' | 'throws' | 'distance'
-}
+// Реальные типы Athlete/Result/Injury живут в src/contexts/Athletescontext.tsx —
+// именно оттуда их и нужно импортировать в компонентах.
+// Здесь остаются только вычислительные таблицы очков и справочники,
+// которые не привязаны к структуре БД.
 
-export interface Result {
-  id: string
-  athleteId: string
-  date: string
-  discipline: string
-  result: string
-  resultValue: number
-  unit: string
-  location: string
-  type: 'training' | 'competition' | 'test'
-  wind?: number
-  surface?: string
-  shoes?: string
-  comment?: string
-  weather?: string
-  feeling?: number
-  rpe?: number
-}
-
-export interface Competition {
-  id: string
-  name: string
-  date: string
-  location: string
-  organizer: string
-  athletes: string[]
-  type: 'indoor' | 'outdoor' | 'road'
-  level: 'regional' | 'national' | 'international'
-}
-
-export interface Training {
-  id: string
-  date: string
-  type: string
-  duration: number
-  intensity: 'low' | 'medium' | 'high' | 'max'
-  goal: string
-  athletes: string[]
-  attended: string[]
-  notes: string
-}
-
-// World Athletics scoring tables coefficients (simplified)
 export const decathlonEvents = [
   { id: '100m', name: '100 м', unit: 's', type: 'track', a: 25.4347, b: 18, c: 1.81 },
   { id: 'lj', name: 'Прыжок в длину', unit: 'm', type: 'field', a: 0.14354, b: 220, c: 1.4 },

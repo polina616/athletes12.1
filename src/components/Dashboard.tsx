@@ -33,12 +33,31 @@ function EmptyRow({ text }: { text: string }) {
   )
 }
 
+// Уровни соревнований — должны совпадать 1-в-1 со значениями,
+// которые пишет форма создания в Competitions.tsx.
+type CompLevel = 'city' | 'district' | 'region' | 'republic' | 'school'
+
 interface Competition {
   id: string
   name: string
   date: string
   location: string
-  level: 'regional' | 'national' | 'international'
+  level: CompLevel
+}
+
+const levelColors: Record<CompLevel, string> = {
+  city: '#60a5fa',
+  district: '#a78bfa',
+  region: '#fbbf24',
+  republic: '#c6f135',
+  school: '#f87171',
+}
+const levelLabels: Record<CompLevel, string> = {
+  city: 'Город',
+  district: 'Район',
+  region: 'Область',
+  republic: 'Республика',
+  school: 'Школа',
 }
 
 export default function Dashboard() {
@@ -50,19 +69,24 @@ export default function Dashboard() {
     if (!coachProfile) return
     const fetchComps = async () => {
       const today = new Date().toISOString().slice(0, 10)
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('competitions')
         .select('id, name, date, location, level')
         .eq('coach_id', coachProfile.id)
         .gte('date', today)
         .order('date', { ascending: true })
         .limit(3)
+      if (error) {
+        console.error('Ошибка загрузки соревнований:', error)
+        setUpcomingComps([])
+        return
+      }
       setUpcomingComps((data || []).map(c => ({
         id: c.id,
         name: c.name,
         date: c.date,
         location: c.location || '',
-        level: c.level,
+        level: (c.level as CompLevel) || 'city',
       })))
     }
     fetchComps()
@@ -119,12 +143,6 @@ export default function Dashboard() {
       accent: "#fbbf24",
     },
   ]
-
-  const levelColors: Record<string, string> = {
-    regional: '#60a5fa',
-    national: '#a78bfa',
-    international: '#c6f135',
-  }
 
   return (
     <div style={{ animation: "fadeIn 0.35s ease forwards" }}>
@@ -502,7 +520,7 @@ export default function Dashboard() {
                     color: levelColors[c.level],
                     textTransform: 'uppercase', letterSpacing: '0.06em',
                     marginTop: 6, display: 'inline-block',
-                  }}>{c.level === 'regional' ? 'Регион' : c.level === 'national' ? 'Россия' : 'Международный'}</span>
+                  }}>{levelLabels[c.level]}</span>
                 </div>
               ))}
             </div>
