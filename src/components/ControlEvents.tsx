@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { IconPlus } from './Icons'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabaseClient'
+import Modal from './Modal';
 
 const LIME = '#c6f135'
 
@@ -274,42 +275,20 @@ export default function ControlEvents() {
       )}
 
       {showModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.7)',
-            backdropFilter: 'blur(6px)',
-            zIndex: 9999,
-            overflowY: 'auto',
-          }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowModal(false)
-          }}
-        >
-          <div
-            style={{
-              minHeight: '100vh',
-              display: 'flex',
-              alignItems: 'flex-start',
-              justifyContent: 'center',
-              padding: '16px 16px 40px',
-            }}
-          >
-            <div
-              style={{
-                background: '#11131a',
-                border: '1px solid #1f2937',
-                borderRadius: 16,
-                width: '100%',
-                maxWidth: 560,
-                padding: 24,
-              }}
-              onClick={e => e.stopPropagation()}
-            >
-            <h3 style={{ margin: '0 0 18px', fontSize: 22 }}>
-              {editingId ? 'Редактировать зачет' : 'Новый контрольный зачет'}
-            </h3>
+  <Modal onClose={() => setShowModal(false)}>
+    <div
+      style={{
+        background: '#11131a',
+        border: '1px solid #1f2937',
+        borderRadius: 16,
+        width: '100%',
+        maxWidth: 560,
+        padding: 24,
+      }}
+    >
+      <h3 style={{ margin: '0 0 18px', fontSize: 22 }}>
+        {editingId ? 'Редактировать зачет' : 'Новый контрольный зачет'}
+      </h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
@@ -451,9 +430,8 @@ export default function ControlEvents() {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+         </Modal>
+        )}
     </div>
   )
 }

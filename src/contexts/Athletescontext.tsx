@@ -39,7 +39,7 @@ export interface Result {
   resultValue: number;
   unit: string;
   location: string;
-  type: 'training' | 'competition' | 'test';
+  type: 'training' | 'test';
   wind?: number;
   surface?: string;
   shoes?: string;
@@ -47,6 +47,7 @@ export interface Result {
   weather?: string;
   feeling?: number;
   rpe?: number;
+  controlEventId?: string; 
 }
 
 export interface Injury {
@@ -91,6 +92,8 @@ interface AthletesContextType {
   addInjury: (athleteId: string, data: { name: string; dateInjured: string; dateHealed?: string; description?: string }) => Promise<{ error: string | null }>;
   updateInjury: (id: string, data: Partial<{ name: string; dateInjured: string; dateHealed: string; description: string; status: 'active' | 'healed' }>) => Promise<{ error: string | null }>;
   deleteInjury: (id: string) => Promise<{ error: string | null }>;
+  addResult: (input: Omit<Result, 'id'>) => Promise<{ error: string | null }>;
+  deleteResult: (id: string) => Promise<{ error: string | null }>;
 }
 
 const AthletesContext = createContext<AthletesContextType | undefined>(undefined);
@@ -186,6 +189,7 @@ function rowToResult(row: any): Result {
     weather: row.weather ?? undefined,
     feeling: row.feeling ?? undefined,
     rpe: row.rpe ?? undefined,
+    controlEventId: row.control_event_id ?? undefined,
   };
 }
 
@@ -465,9 +469,42 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await refresh();
     return { error: null };
   };
+  const addResult = async (input: Omit<Result, 'id'>) => {
+  const { error } = await supabase.from('results').insert({
+    athlete_id: input.athleteId,
+    date: input.date,
+    discipline: input.discipline,
+    result: input.result,
+    result_value: input.resultValue,
+    unit: input.unit,
+    location: input.location || null,
+    type: input.type,
+    wind: input.wind ?? null,
+    surface: input.surface ?? null,
+    shoes: input.shoes ?? null,
+    comment: input.comment ?? null,
+    weather: input.weather ?? null,
+    feeling: input.feeling ?? null,
+    rpe: input.rpe ?? null,
+    control_event_id: input.controlEventId ?? null,
+  });
+  if (error) {
+    console.error('Ошибка добавления результата:', error);
+    return { error: getFriendlySupabaseError(error) };
+  }
+  await refresh();
+  return { error: null };
+};
+
+const deleteResult = async (id: string) => {
+  const { error } = await supabase.from('results').delete().eq('id', id);
+  if (error) return { error: getFriendlySupabaseError(error) };
+  await refresh();
+  return { error: null };
+};
 
   return (
-    <AthletesContext.Provider value={{ athletes, results, injuries, loading, refresh, addAthlete, updateAthlete, deleteAthlete, addInjury, updateInjury, deleteInjury }}>
+    <AthletesContext.Provider value={{ athletes, results, injuries, loading, refresh, addAthlete, updateAthlete, deleteAthlete, addInjury, updateInjury, deleteInjury, addResult, deleteResult }}>
       {children}
     </AthletesContext.Provider>
   );

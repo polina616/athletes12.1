@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { IconDash, IconAthletes, IconCalendar, IconTrophy, IconMedal, IconChart, IconSettings, IconLogout } from './Icons'
+import { IconDash, IconAthletes, IconCalendar, IconTrophy, IconChart, IconSettings, IconLogout } from './Icons'
 import athleteImg from '@/imports/images-removebg-preview.png'
 
 const navItems = [
@@ -7,7 +7,6 @@ const navItems = [
   { path: '/athletes', label: 'Спортсмены', Icon: IconAthletes },
   { path: '/training', label: 'Тренировки', Icon: IconCalendar },
   { path: '/control-events', label: 'Контрольные зачеты', Icon: IconTrophy },
-  { path: '/competitions', label: 'Соревнования', Icon: IconMedal },
   { path: '/analytics', label: 'Аналитика', Icon: IconChart },
   { path: '/settings', label: 'Настройки', Icon: IconSettings },
 ]

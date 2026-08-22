@@ -6,7 +6,6 @@ import Dashboard from './components/Dashboard';
 import Athletes from './components/Athletes';
 import AthleteProfile from './components/AthleteProfile';
 import Training from './components/Training';
-import Competitions from './components/Competitions';
 import Analytics from './components/Analytics';
 import Disciplines from './components/Disciplines';
 import { IconSearch, IconBell } from './components/Icons';
@@ -191,7 +190,6 @@ export default function App() {
             <Route path="/athlete/:id" element={<AthleteProfile />} />
             <Route path="/training" element={<Training />} />
             <Route path="/control-events" element={<ControlEvents />} />
-            <Route path="/competitions" element={<Competitions />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/disciplines" element={<Disciplines />} />
             <Route path="/settings" element={<SettingsPlaceholder />} />

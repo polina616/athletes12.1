@@ -367,9 +367,9 @@ function ResultsTab({ results }: { results: any[] }) {
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 700, color: LIME }}>
             {r.result} <span style={{ fontSize: 11, color: '#6b7280' }}>{r.unit}</span>
           </div>
-          <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 3, background: r.type === 'competition' ? 'rgba(167,139,250,0.15)' : 'rgba(96,165,250,0.1)', color: r.type === 'competition' ? '#a78bfa' : '#60a5fa', textTransform: 'uppercase', fontWeight: 600 }}>
-            {r.type === 'competition' ? 'Старт' : 'Тест'}
-          </span>
+          <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 3, background: 'rgba(96,165,250,0.1)', color: '#60a5fa', textTransform: 'uppercase', fontWeight: 600 }}>
+  Тест
+</span>
         </div>
       ))}
     </div>

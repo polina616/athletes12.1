@@ -33,64 +33,43 @@ function EmptyRow({ text }: { text: string }) {
   )
 }
 
-// Уровни соревнований — должны совпадать 1-в-1 со значениями,
-// которые пишет форма создания в Competitions.tsx.
-type CompLevel = 'city' | 'district' | 'region' | 'republic' | 'school'
-
-interface Competition {
+interface UpcomingEvent {
   id: string
   name: string
   date: string
-  location: string
-  level: CompLevel
-}
-
-const levelColors: Record<CompLevel, string> = {
-  city: '#60a5fa',
-  district: '#a78bfa',
-  region: '#fbbf24',
-  republic: '#c6f135',
-  school: '#f87171',
-}
-const levelLabels: Record<CompLevel, string> = {
-  city: 'Город',
-  district: 'Район',
-  region: 'Область',
-  republic: 'Республика',
-  school: 'Школа',
+  disciplineCount: number
 }
 
 export default function Dashboard() {
     const { athletes, results, injuries, loading } = useAthletes()
   const { coachProfile } = useAuth()
-  const [upcomingComps, setUpcomingComps] = useState<Competition[]>([])
+  const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>([])
 
-  useEffect(() => {
-    if (!coachProfile) return
-    const fetchComps = async () => {
-      const today = new Date().toISOString().slice(0, 10)
-      const { data, error } = await supabase
-        .from('competitions')
-        .select('id, name, date, location, level')
-        .eq('coach_id', coachProfile.id)
-        .gte('date', today)
-        .order('date', { ascending: true })
-        .limit(3)
-      if (error) {
-        console.error('Ошибка загрузки соревнований:', error)
-        setUpcomingComps([])
-        return
-      }
-      setUpcomingComps((data || []).map(c => ({
-        id: c.id,
-        name: c.name,
-        date: c.date,
-        location: c.location || '',
-        level: (c.level as CompLevel) || 'city',
-      })))
+useEffect(() => {
+  if (!coachProfile) return
+  const fetchEvents = async () => {
+    const today = new Date().toISOString().slice(0, 10)
+    const { data, error } = await supabase
+      .from('control_events')
+      .select('id, name, date, disciplines')
+      .eq('coach_id', coachProfile.id)
+      .gte('date', today)
+      .order('date', { ascending: true })
+      .limit(3)
+    if (error) {
+      console.error('Ошибка загрузки зачётов:', error)
+      setUpcomingEvents([])
+      return
     }
-    fetchComps()
-  }, [coachProfile])
+    setUpcomingEvents((data || []).map(e => ({
+      id: e.id,
+      name: e.name,
+      date: e.date,
+      disciplineCount: Array.isArray(e.disciplines) ? e.disciplines.length : 0,
+    })))
+  }
+  fetchEvents()
+}, [coachProfile])
 
     const activeCount = athletes.filter(a => a.status === "active").length
       const injuredAthletes = athletes.filter(a => a.status === "injured" || injuries.some(i => i.athleteId === a.id && i.status === 'active')
@@ -496,37 +475,23 @@ export default function Dashboard() {
             backdropFilter: "blur(12px)",
           }}
         >
-          <div
-            style={{
-              fontFamily: "'Barlow Condensed', sans-serif",
-              fontSize: 16,
-              fontWeight: 700,
-              color: "#f0f2f5",
-              letterSpacing: "0.04em",
-              marginBottom: 16,
-            }}
-          >
-            БЛИЖАЙШИЕ СТАРТЫ
-          </div>
-          {upcomingComps.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {upcomingComps.map(c => (
-                <div key={c.id} style={{ padding: '10px 12px', background: 'rgba(20,23,32,0.5)', borderRadius: 8, border: '1px solid #1e2230' }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f2f5' }}>{c.name}</div>
-                  <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{c.date} · {c.location}</div>
-                  <span style={{
-                    fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 700,
-                    background: `${levelColors[c.level]}18`,
-                    color: levelColors[c.level],
-                    textTransform: 'uppercase', letterSpacing: '0.06em',
-                    marginTop: 6, display: 'inline-block',
-                  }}>{levelLabels[c.level]}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyRow text="Нет предстоящих соревнований" />
-          )}
+          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, color: '#f0f2f5', letterSpacing: '0.04em', marginBottom: 16 }}>
+  БЛИЖАЙШИЕ ЗАЧЁТЫ
+</div>
+{upcomingEvents.length > 0 ? (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    {upcomingEvents.map(e => (
+      <div key={e.id} style={{ padding: '10px 12px', background: 'rgba(20,23,32,0.5)', borderRadius: 8, border: '1px solid #1e2230' }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f2f5' }}>{e.name}</div>
+        <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
+          {new Date(e.date).toLocaleDateString('ru-RU')} · {e.disciplineCount} дисциплин
+        </div>
+      </div>
+    ))}
+  </div>
+) : (
+  <EmptyRow text="Нет предстоящих зачётов" />
+)}
         </div>
 
         <div
@@ -639,17 +604,14 @@ export default function Dashboard() {
                         fontSize: 9,
                         padding: "2px 5px",
                         borderRadius: 3,
-                        background:
-                          r.type === "competition"
-                            ? "rgba(167,139,250,0.15)"
-                            : "rgba(96,165,250,0.1)",
-                        color: r.type === "competition" ? "#a78bfa" : "#60a5fa",
+                        background: "rgba(96,165,250,0.1)",
+color: "#60a5fa",
                         textTransform: "uppercase",
                         letterSpacing: "0.06em",
                         fontWeight: 600,
                       }}
                     >
-                      {r.type === "competition" ? "Соревн" : "Тест"}
+                      Тест
                     </div>
                   </div>
                 )
