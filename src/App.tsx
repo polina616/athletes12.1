@@ -1,53 +1,65 @@
-import { useState } from 'react';
 import { useAuth } from './contexts/AuthContext';
-import { Page } from './types';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import Athletes from './components/Athletes';
+import AthleteProfile from './components/AthleteProfile';
 import Training from './components/Training';
 import Competitions from './components/Competitions';
 import Analytics from './components/Analytics';
 import Disciplines from './components/Disciplines';
 import { IconSearch, IconBell } from './components/Icons';
+import ControlEvents from './components/ControlEvents';
+
+function LoadingScreen() {
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: '#080a0f',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'column',
+      gap: 16,
+    }}>
+      <div style={{
+        width: 40,
+        height: 40,
+        border: '3px solid #1e2230',
+        borderTopColor: '#c6f135',
+        borderRadius: '50%',
+        animation: 'spin 0.8s linear infinite',
+      }} />
+      <div style={{ color: '#6b7280', fontSize: 14 }}>Восстановление сессии…</div>
+    </div>
+  );
+}
 
 export default function App() {
-  const { user, coachProfile, signOut } = useAuth();
-  const [page, setPage] = useState<Page>('dashboard');
+  const { user, coachProfile, loading, signOut } = useAuth();
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
 
   if (!user || !coachProfile) {
     return <Login />;
   }
 
-  // TODO: добавить поле role в таблицу coaches и в тип coachProfile,
-  // пока по умолчанию считаем всех вошедших тренерами
   const role: 'admin' | 'coach' = 'coach';
   const displayName = coachProfile.name;
-
-  const pageComponent = {
-    dashboard: <Dashboard />,
-    athletes: <Athletes />,
-    training: <Training />,
-    competitions: <Competitions />,
-    analytics: <Analytics />,
-    settings: <SettingsPlaceholder />,
-    disciplines: <Disciplines />,
-  }[page];
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#080a0f' }}>
       <Sidebar
-        current={page}
-        onNavigate={setPage}
         userName={displayName}
         role={role}
         onLogout={signOut}
         notifications={3}
       />
 
-      {/* Main */}
       <main style={{ marginLeft: 220, flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-        {/* Top bar */}
         <header style={{
           height: 56,
           borderBottom: '1px solid #1e2230',
@@ -62,7 +74,6 @@ export default function App() {
           top: 0,
           zIndex: 50,
         }}>
-          {/* Search bar */}
           <div style={{ position: 'relative', flex: '0 1 280px' }}>
             <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#4b5563' }}>
               <IconSearch />
@@ -84,7 +95,6 @@ export default function App() {
             />
           </div>
 
-          {/* Notifications */}
           <button style={{
             position: 'relative',
             background: 'rgba(15,17,23,0.8)',
@@ -111,7 +121,6 @@ export default function App() {
             }} />
           </button>
 
-          {/* User chip */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -133,16 +142,16 @@ export default function App() {
               fontWeight: 700,
               color: '#c6f135',
             }}>
-             {(user.user_metadata?.name ?? '')
-              .split(' ')
-              .filter(Boolean)
-              .map((w: string) => w[0])
-              .join('')
-              .slice(0, 2) || '??'}
+              {(user.user_metadata?.name ?? '')
+                .split(' ')
+                .filter(Boolean)
+                .map((w: string) => w[0])
+                .join('')
+                .slice(0, 2) || '??'}
             </div>
             <span style={{ fontSize: 12, color: '#d1d5db', fontWeight: 500 }}>
-  {user.user_metadata?.name ?? coachProfile?.name ?? 'Без имени'}
-</span>
+              {user.user_metadata?.name ?? coachProfile?.name ?? 'Без имени'}
+            </span>
             <span style={{
               fontSize: 9,
               padding: '2px 6px',
@@ -156,9 +165,18 @@ export default function App() {
           </div>
         </header>
 
-        {/* Content */}
         <div style={{ flex: 1, padding: '28px 28px 40px', maxWidth: 1400 }}>
-          {pageComponent}
+          <Routes>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/athletes" element={<Athletes />} />
+            <Route path="/athlete/:id" element={<AthleteProfile />} />
+            <Route path="/training" element={<Training />} />
+            <Route path="/control-events" element={<ControlEvents />} />
+            <Route path="/analytics" element={<Analytics />} />
+            <Route path="/disciplines" element={<Disciplines />} />
+            <Route path="/settings" element={<SettingsPlaceholder />} />
+          </Routes>
         </div>
       </main>
     </div>

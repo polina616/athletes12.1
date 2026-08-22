@@ -77,6 +77,9 @@ html, body, #root {
   100% { transform: scale(1.4); opacity: 0; }
 }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 .animate-fade-in { animation: fadeIn 0.3s ease forwards; }
 
 .trend-up { color: #c6f135; }

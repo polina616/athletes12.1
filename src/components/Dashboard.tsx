@@ -42,7 +42,7 @@ interface Competition {
 }
 
 export default function Dashboard() {
-  const { athletes, results, loading } = useAthletes()
+    const { athletes, results, injuries, loading } = useAthletes()
   const { coachProfile } = useAuth()
   const [upcomingComps, setUpcomingComps] = useState<Competition[]>([])
 
@@ -68,8 +68,9 @@ export default function Dashboard() {
     fetchComps()
   }, [coachProfile])
 
-  const activeCount = athletes.filter(a => a.status === "active").length
-  const injuredAthletes = athletes.filter(a => a.status === "injured")
+    const activeCount = athletes.filter(a => a.status === "active").length
+      const injuredAthletes = athletes.filter(a => a.status === "injured" || injuries.some(i => i.athleteId === a.id && i.status === 'active')
+  )
   const avgAge = averageAge(athletes)
 
   const scored = athletes

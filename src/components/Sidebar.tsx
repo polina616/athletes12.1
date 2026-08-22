@@ -1,27 +1,26 @@
-import { IconDash, IconAthletes, IconCalendar, IconTrophy, IconChart, IconSettings, IconLogout, IconRun, IconBell } from './Icons'
+import { Link, useLocation } from 'react-router-dom';
+import { IconDash, IconAthletes, IconCalendar, IconTrophy, IconChart, IconSettings, IconLogout, IconRun } from './Icons'
 import athleteImg from '@/imports/images-removebg-preview.png'
 
-type Page = 'dashboard' | 'athletes' | 'training' | 'competitions' | 'analytics' | 'settings'
-
-interface SidebarProps {
-  current: Page
-  onNavigate: (p: Page) => void
-  userName: string
-  role: 'admin' | 'coach'
-  onLogout: () => void
-  notifications?: number
-}
-
-const navItems: { id: Page; label: string; Icon: () => JSX.Element }[] = [
-  { id: 'dashboard', label: 'Панель управления', Icon: IconDash },
-  { id: 'athletes', label: 'Спортсмены', Icon: IconAthletes },
-  { id: 'training', label: 'Тренировки', Icon: IconCalendar },
-  { id: 'competitions', label: 'Соревнования', Icon: IconTrophy },
-  { id: 'analytics', label: 'Аналитика', Icon: IconChart },
-  { id: 'settings', label: 'Настройки', Icon: IconSettings },
+const navItems = [
+  { path: '/dashboard', label: 'Панель управления', Icon: IconDash },
+  { path: '/athletes', label: 'Спортсмены', Icon: IconAthletes },
+  { path: '/training', label: 'Тренировки', Icon: IconCalendar },
+    { path: '/control-events', label: 'Контрольные зачеты', Icon: IconTrophy },
+  { path: '/analytics', label: 'Аналитика', Icon: IconChart },
+  { path: '/settings', label: 'Настройки', Icon: IconSettings },
 ]
 
-export default function Sidebar({ current, onNavigate, userName, role, onLogout, notifications = 3 }: SidebarProps) {
+interface SidebarProps {
+  userName: string;
+  role: 'admin' | 'coach';
+  onLogout: () => void;
+  notifications?: number;
+}
+
+export default function Sidebar({ userName, role, onLogout, notifications = 3 }: SidebarProps) {
+  const location = useLocation();
+
   return (
     <aside style={{
       width: 220,
@@ -36,7 +35,6 @@ export default function Sidebar({ current, onNavigate, userName, role, onLogout,
       bottom: 0,
       zIndex: 100,
     }}>
-      {/* Logo */}
       <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid #1e2230' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{
@@ -61,7 +59,6 @@ export default function Sidebar({ current, onNavigate, userName, role, onLogout,
         </div>
       </div>
 
-      {/* Athlete silhouette decoration */}
       <div style={{ position: 'relative', height: 130, overflow: 'hidden', flexShrink: 0 }}>
         <div style={{
           position: 'absolute', inset: 0,
@@ -86,14 +83,13 @@ export default function Sidebar({ current, onNavigate, userName, role, onLogout,
         />
       </div>
 
-      {/* Nav */}
       <nav style={{ flex: 1, padding: '12px 0', overflowY: 'auto' }}>
-        {navItems.map(({ id, label, Icon }) => {
-          const active = current === id
+        {navItems.map(({ path, label, Icon }) => {
+          const active = location.pathname === path || (path !== '/dashboard' && location.pathname.startsWith(path));
           return (
-            <button
-              key={id}
-              onClick={() => onNavigate(id)}
+            <Link
+              key={path}
+              to={path}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -111,13 +107,14 @@ export default function Sidebar({ current, onNavigate, userName, role, onLogout,
                 transition: 'all 0.15s',
                 fontFamily: "'Inter', sans-serif",
                 position: 'relative',
+                textDecoration: 'none',
               }}
               onMouseEnter={e => { if (!active) { (e.currentTarget as HTMLElement).style.color = '#d1d5db'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)' } }}
               onMouseLeave={e => { if (!active) { (e.currentTarget as HTMLElement).style.color = '#6b7280'; (e.currentTarget as HTMLElement).style.background = 'transparent' } }}
             >
               <Icon />
               <span>{label}</span>
-              {id === 'dashboard' && notifications > 0 && (
+              {path === '/dashboard' && notifications > 0 && (
                 <span style={{
                   marginLeft: 'auto',
                   background: '#c6f135',
@@ -130,12 +127,11 @@ export default function Sidebar({ current, onNavigate, userName, role, onLogout,
                   textAlign: 'center',
                 }}>{notifications}</span>
               )}
-            </button>
+            </Link>
           )
         })}
       </nav>
 
-      {/* User */}
       <div style={{ padding: '16px', borderTop: '1px solid #1e2230' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
           <div style={{

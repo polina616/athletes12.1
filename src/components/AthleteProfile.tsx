@@ -1,502 +1,582 @@
-import { useState } from 'react'
-import { decathlonEvents, heptathlonEvents, calcDecathlonPoints } from '../data/mockData'
-import { useAthletes, type Athlete } from '../contexts/Athletescontext'
-import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  RadarChart, PolarGrid, PolarAngleAxis, Radar, AreaChart, Area,
-} from 'recharts'
-import { IconChevron, IconTrend } from './Icons'
+import { useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useAthletes, Injury } from '../contexts/Athletescontext';
+import { calcDecathlonPoints, decathlonEvents, heptathlonEvents } from '../data/mockData';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { IconArrowLeft, IconUser } from './Icons';
 
-const LIME = '#c6f135'
+const LIME = '#c6f135';
 
-const tabs = ['Обзор', 'Результаты', 'Медицина', 'Многоборье'] as const
-type Tab = typeof tabs[number]
+export default function AthleteProfile() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { athletes, results, injuries, updateAthlete, addInjury, updateInjury, deleteInjury } = useAthletes();
+  const [tab, setTab] = useState<'results' | 'decathlon' | 'chart' | 'injuries'>('results');
+  const [showEdit, setShowEdit] = useState(false);
 
-function StatBadge({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div style={{
-      background: 'rgba(20,23,32,0.8)',
-      border: '1px solid #1e2230',
-      borderRadius: 8,
-      padding: '12px 14px',
-    }}>
-      <div style={{ fontSize: 10, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, fontWeight: 700, color: '#f0f2f5' }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{sub}</div>}
+  const athlete = athletes.find(a => a.id === id);
+  if (!athlete) return <div style={{ color: '#6b7280', padding: 40 }}>Спортсмен не найден</div>;
+
+  const athleteResults = results.filter(r => r.athleteId === id);
+  const athleteInjuries = injuries.filter((i: Injury) => i.athleteId === id);
+
+  const InfoRow = ({ label, value }: { label: string; value: string }) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #1e2230' }}>
+      <span style={{ color: '#6b7280', fontSize: 12 }}>{label}</span>
+      <span style={{ color: '#f0f2f5', fontSize: 12, fontWeight: 500 }}>{value || '—'}</span>
     </div>
-  )
-}
-
-function EmptyState({ text }: { text: string }) {
-  return (
-    <div style={{ textAlign: 'center', padding: '50px 0', color: '#6b7280', fontSize: 13 }}>{text}</div>
-  )
-}
-
-function ResultsTab({ athlete }: { athlete: Athlete }) {
-  const { results } = useAthletes()
-  const athleteResults = results.filter(r => r.athleteId === athlete.id)
-  const disciplines = [...new Set(athleteResults.map(r => r.discipline))]
-  const [selectedDisc, setSelectedDisc] = useState(disciplines[0] || '')
-
-  if (athleteResults.length === 0) {
-    return <EmptyState text="Пока нет внесённых результатов для этого спортсмена." />
-  }
-
-  const activeDisc = disciplines.includes(selectedDisc) ? selectedDisc : disciplines[0]
-
-  const discResults = athleteResults
-    .filter(r => r.discipline === activeDisc)
-    .sort((a, b) => a.date.localeCompare(b.date))
-
-  const chartData = discResults.map(r => ({
-    date: r.date.slice(5),
-    val: r.resultValue,
-    label: r.result,
-  }))
-
-  const best = discResults.reduce((b, r) => {
-    if (!b) return r
-    const unit = r.unit
-    if (unit === 's') return r.resultValue < b.resultValue ? r : b
-    return r.resultValue > b.resultValue ? r : b
-  }, discResults[0])
+  );
 
   return (
-    <div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
-        {disciplines.map(d => (
-          <button
-            key={d}
-            onClick={() => setSelectedDisc(d)}
-            style={{
-              padding: '6px 12px',
-              borderRadius: 6,
-              border: '1px solid',
-              borderColor: activeDisc === d ? LIME : '#1e2230',
-              background: activeDisc === d ? 'rgba(198,241,53,0.1)' : 'transparent',
-              color: activeDisc === d ? LIME : '#9ca3af',
-              fontSize: 12,
-              fontWeight: activeDisc === d ? 600 : 400,
-              cursor: 'pointer',
-              fontFamily: "'Inter', sans-serif",
-              transition: 'all 0.15s',
-            }}
-          >{d}</button>
-        ))}
-      </div>
-
-      {discResults.length > 0 && (
-        <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
-            <StatBadge label="Лучший результат" value={best?.result || '-'} sub={best?.unit} />
-            <StatBadge label="Результатов" value={String(discResults.length)} />
-            <StatBadge label="Последний" value={discResults[discResults.length - 1]?.result || '-'} sub={discResults[discResults.length - 1]?.date} />
-            <StatBadge
-              label="Улучшение"
-              value={(() => {
-                if (discResults.length < 2) return '—'
-                const first = discResults[0].resultValue
-                const last = discResults[discResults.length - 1].resultValue
-                const isTrack = discResults[0].unit === 's'
-                const delta = isTrack ? ((first - last) / first * 100) : ((last - first) / first * 100)
-                return `${delta > 0 ? '+' : ''}${delta.toFixed(1)}%`
-              })()}
-            />
-          </div>
-
-          <div style={{
-            background: 'rgba(20,23,32,0.6)',
-            border: '1px solid #1e2230',
-            borderRadius: 10,
-            padding: '16px',
-            marginBottom: 20,
-          }}>
-            <ResponsiveContainer width="100%" height={180}>
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={LIME} stopOpacity={0.2} />
-                    <stop offset="100%" stopColor={LIME} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis domain={['auto', 'auto']} tick={{ fill: '#6b7280', fontSize: 10, fontFamily: "'JetBrains Mono'" }} axisLine={false} tickLine={false} width={50} />
-                <Tooltip
-                 contentStyle={{ background: '#141720', border: '1px solid #1e2230', borderRadius: 8, fontSize: 12 }}
-                 formatter={(value: any) => [String(value), activeDisc] as [string, string]}
-/>
-                <Area type="monotone" dataKey="val" stroke={LIME} strokeWidth={2} fill="url(#area)" dot={{ fill: LIME, r: 4 }} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div style={{ background: 'rgba(20,23,32,0.5)', borderRadius: 10, overflow: 'hidden', border: '1px solid #1e2230' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #1e2230' }}>
-                  {['Дата', 'Результат', 'Место', 'Тип', 'Ветер', 'Комментарий'].map(h => (
-                    <th key={h} style={{ padding: '10px 14px', textAlign: 'left', color: '#6b7280', fontWeight: 500, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {discResults.map((r, i) => (
-                  <tr key={r.id} style={{ borderBottom: i < discResults.length - 1 ? '1px solid rgba(30,34,48,0.5)' : 'none' }}>
-                    <td style={{ padding: '10px 14px', color: '#9ca3af', fontFamily: "'JetBrains Mono', monospace" }}>{r.date}</td>
-                    <td style={{ padding: '10px 14px', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: r.id === best?.id ? LIME : '#f0f2f5' }}>
-                      {r.result} {r.unit}
-                    </td>
-                    <td style={{ padding: '10px 14px', color: '#9ca3af' }}>{r.location || '—'}</td>
-                    <td style={{ padding: '10px 14px' }}>
-                      <span style={{
-                        fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 600,
-                        background: r.type === 'competition' ? 'rgba(167,139,250,0.15)' : 'rgba(96,165,250,0.1)',
-                        color: r.type === 'competition' ? '#a78bfa' : '#60a5fa',
-                        textTransform: 'uppercase', letterSpacing: '0.05em',
-                      }}>{r.type === 'competition' ? 'Соревн' : 'Тест'}</span>
-                    </td>
-                    <td style={{ padding: '10px 14px', color: '#6b7280', fontFamily: "'JetBrains Mono'" }}>
-                      {r.wind !== undefined ? `${r.wind > 0 ? '+' : ''}${r.wind}` : '—'}
-                    </td>
-                    <td style={{ padding: '10px 14px', color: '#6b7280' }}>{r.comment || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
-function DecathlonTab({ athlete }: { athlete: Athlete }) {
-  const { results } = useAthletes()
-  const events = athlete.gender === 'F' ? heptathlonEvents : decathlonEvents
-  const name = athlete.gender === 'F' ? 'Семиборье' : 'Десятиборье'
-
-  const athleteResults = results.filter(r => r.athleteId === athlete.id)
-
-  const eventsWithScores = events.map(ev => {
-    const disc = ev.name
-    const evResults = athleteResults.filter(r => r.discipline === disc)
-    const best = evResults.reduce((b, r) => {
-      if (!b) return r
-      return ev.type === 'track' ? (r.resultValue < b.resultValue ? r : b) : (r.resultValue > b.resultValue ? r : b)
-    }, evResults[0])
-
-    const resultVal = best?.resultValue || 0
-    const pts = resultVal > 0 ? calcDecathlonPoints(ev, resultVal) : 0
-    return { ...ev, resultVal, result: best?.result || '—', pts }
-  })
-
-  const totalPts = eventsWithScores.reduce((s, e) => s + e.pts, 0)
-  const hasAnyScore = eventsWithScores.some(e => e.pts > 0)
-  const maxPts = eventsWithScores.length * 1000
-  const bestEvent = eventsWithScores.reduce((b, e) => e.pts > b.pts ? e : b, eventsWithScores[0])
-  const scoredEvents = eventsWithScores.filter(e => e.pts > 0)
-const worstEvent = scoredEvents.length > 0
-  ? scoredEvents.reduce((b, e) => (e.pts < b.pts ? e : b))
-  : undefined
-
-  const radarData = eventsWithScores.map(e => ({
-    event: e.name.replace('Прыжок ', '').replace('Метание ', '').replace(' м', 'м'),
-    pts: e.pts,
-  }))
-
-  if (!hasAnyScore) {
-    return <EmptyState text={`Пока нет результатов ни по одной дисциплине ${name.toLowerCase()}а. Внесите тестирования во вкладке «Результаты».`} />
-  }
-
-  return (
-    <div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 24, marginBottom: 24 }}>
-        <div>
-          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 14, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>
-            {name} — текущий результат
-          </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-            <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 52, fontWeight: 900, color: LIME, lineHeight: 1 }}>
-              {totalPts.toLocaleString('ru')}
-            </span>
-            <span style={{ fontSize: 16, color: '#6b7280' }}>очков</span>
-          </div>
-         <div style={{ marginTop: 8, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-  {bestEvent && (
-    <div style={{ fontSize: 12 }}>
-      <span style={{ color: '#6b7280' }}>Лучшая: </span>
-      <span style={{ color: LIME, fontWeight: 600 }}>{bestEvent?.name}</span>
-      <span style={{ color: '#6b7280' }}> ({bestEvent?.pts} pts)</span>
-    </div>
-  )}
-  {worstEvent && (
-    <div style={{ fontSize: 12 }}>
-      <span style={{ color: '#6b7280' }}>Слабая: </span>
-      <span style={{ color: '#f87171', fontWeight: 600 }}>{worstEvent?.name}</span>
-      <span style={{ color: '#6b7280' }}> ({worstEvent?.pts} pts)</span>
-    </div>
-  )}
-</div>
-        </div>
-        <div style={{ width: 220 }}>
-          <ResponsiveContainer width={220} height={180}>
-            <RadarChart data={radarData}>
-              <PolarGrid stroke="#1e2230" />
-              <PolarAngleAxis dataKey="event" tick={{ fill: '#6b7280', fontSize: 9 }} />
-              <Radar dataKey="pts" stroke={LIME} fill={LIME} fillOpacity={0.15} strokeWidth={1.5} />
-            </RadarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div style={{ background: 'rgba(20,23,32,0.5)', borderRadius: 10, overflow: 'hidden', border: '1px solid #1e2230' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid #1e2230' }}>
-              {['Дисциплина', 'Результат', 'Очки', 'Доля', 'Прогресс'].map(h => (
-                <th key={h} style={{ padding: '10px 16px', textAlign: 'left', color: '#6b7280', fontWeight: 500, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {eventsWithScores.map((ev, i) => {
-              const pct = totalPts > 0 ? (ev.pts / totalPts * 100) : 0
-              return (
-                <tr key={ev.id} style={{ borderBottom: i < eventsWithScores.length - 1 ? '1px solid rgba(30,34,48,0.5)' : 'none' }}>
-                  <td style={{ padding: '12px 16px', color: '#f0f2f5', fontWeight: 500 }}>{ev.name}</td>
-                  <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", color: '#9ca3af' }}>{ev.result} {ev.result !== '—' ? ev.unit : ''}</td>
-                  <td style={{ padding: '12px 16px' }}>
-                    <span style={{
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontWeight: 700,
-                      fontSize: 15,
-                      color: ev.pts >= 900 ? LIME : ev.pts >= 700 ? '#fbbf24' : ev.pts > 0 ? '#f87171' : '#4b5563',
-                    }}>{ev.pts > 0 ? ev.pts : '—'}</span>
-                  </td>
-                  <td style={{ padding: '12px 16px', color: '#6b7280' }}>{ev.pts > 0 ? `${pct.toFixed(1)}%` : '—'}</td>
-                  <td style={{ padding: '12px 16px', width: 120 }}>
-                    <div style={{ height: 4, background: '#1e2230', borderRadius: 2, overflow: 'hidden' }}>
-                      <div style={{
-                        height: '100%',
-                        width: `${Math.min(100, ev.pts / 10)}%`,
-                        background: ev.pts >= 900 ? LIME : ev.pts >= 700 ? '#fbbf24' : '#f87171',
-                        borderRadius: 2,
-                        transition: 'width 0.4s ease',
-                      }} />
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-          <tfoot>
-            <tr style={{ borderTop: '1px solid #2a3040' }}>
-              <td colSpan={2} style={{ padding: '12px 16px', color: '#9ca3af', fontWeight: 600 }}>Итого</td>
-              <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 800, color: LIME }}>{totalPts.toLocaleString('ru')}</td>
-              <td colSpan={2} style={{ padding: '12px 16px', color: '#6b7280', fontSize: 12 }}>из ~{maxPts.toLocaleString('ru')} возможных</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    </div>
-  )
-}
-
-export default function AthleteProfile({ athleteId, onBack }: { athleteId: string; onBack: () => void }) {
-  const { athletes } = useAthletes()
-  const athlete = athletes.find(a => a.id === athleteId)
-  const [tab, setTab] = useState<Tab>('Обзор')
-
-  if (!athlete) return null
-
-  const initials = athlete.name.split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('')
-
-  return (
-    <div style={{ animation: 'fadeIn 0.3s ease forwards' }}>
-      <button
-        onClick={onBack}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          background: 'transparent', border: 'none', color: '#6b7280',
-          cursor: 'pointer', fontSize: 13, marginBottom: 20, padding: 0,
-          fontFamily: "'Inter', sans-serif",
-          transition: 'color 0.15s',
-        }}
-        onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#f0f2f5'}
-        onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#6b7280'}
-      >
-        <IconChevron dir="left" /> Назад к списку
+    <div style={{ animation: 'fadeIn 0.3s ease' }}>
+      <button onClick={() => navigate(-1)} style={{ background: 'transparent', border: 'none', color: '#9ca3af', cursor: 'pointer', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+        <IconArrowLeft /> Назад
       </button>
 
-      <div style={{
-        background: 'rgba(15,17,23,0.8)',
-        border: '1px solid #1e2230',
-        borderRadius: 14,
-        padding: '24px',
-        marginBottom: 20,
-        backdropFilter: 'blur(12px)',
-        display: 'grid',
-        gridTemplateColumns: 'auto 1fr auto',
-        gap: 24,
-        alignItems: 'start',
-        position: 'relative',
-        overflow: 'hidden',
-      }}>
-        <div style={{
-          position: 'absolute', top: 0, left: 0, right: 0, height: 3,
-          background: `linear-gradient(90deg, ${LIME}, transparent)`,
-        }} />
+      <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 20 }}>
+        {/* Left card */}
+        <div style={{ background: 'rgba(15,17,23,0.8)', border: '1px solid #1e2230', borderRadius: 12, padding: '24px', backdropFilter: 'blur(12px)', height: 'fit-content' }}>
+          <div style={{ textAlign: 'center', marginBottom: 16 }}>
+            {athlete.photo ? (
+              <img src={athlete.photo} alt="" style={{ width: 100, height: 100, borderRadius: '50%', objectFit: 'cover', border: '3px solid rgba(198,241,53,0.3)' }} />
+            ) : (
+              <div style={{ width: 100, height: 100, borderRadius: '50%', background: '#1e2230', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', color: '#6b7280' }}>
+                <IconUser />
+              </div>
+            )}
+          </div>
 
-        <div style={{
-          width: 88,
-          height: 88,
-          borderRadius: 12,
-          overflow: 'hidden',
-          border: '2px solid #1e2230',
-          flexShrink: 0,
-          background: '#141720',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          {athlete.photo ? (
-            <img src={athlete.photo} alt={athlete.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          ) : (
-            <span style={{ fontSize: 28, fontWeight: 800, color: '#c6f135', fontFamily: "'Barlow Condensed', sans-serif" }}>{initials}</span>
+          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 700, color: '#f0f2f5', textAlign: 'center', marginBottom: 2 }}>
+            {athlete.nameShort || athlete.name}
+          </div>
+          <div style={{ fontSize: 12, color: '#6b7280', textAlign: 'center', marginBottom: 16 }}>
+            {athlete.specialization === 'decathlon' ? 'Десятиборье' : athlete.specialization === 'heptathlon' ? 'Семиборье' : athlete.specialization} · {athlete.gender === 'M' ? 'М' : 'Ж'}
+          </div>
+
+                    <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 16 }}>
+            {(() => {
+              const hasInjury = athleteInjuries.some((i: Injury) => i.status === 'active');
+              const displayStatus = athlete.status === 'injured' || hasInjury ? 'injured' : athlete.status;
+              return (
+                <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 4, background: displayStatus === 'active' ? 'rgba(198,241,53,0.08)' : 'rgba(248,113,113,0.1)', color: displayStatus === 'active' ? LIME : '#f87171', fontWeight: 600 }}>
+                  {displayStatus === 'active' ? 'Активен' : displayStatus === 'injured' ? 'Травма' : 'Неактивен'}
+                </span>
+              );
+            })()}
+            {athlete.grade && (
+              <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 4, background: 'rgba(96,165,250,0.1)', color: '#60a5fa', fontWeight: 600 }}>
+                {athlete.grade}
+              </span>
+            )}
+          </div>
+
+          <button
+            onClick={() => setShowEdit(true)}
+            style={{
+              width: '100%', padding: '8px', background: 'rgba(198,241,53,0.08)',
+              border: '1px solid rgba(198,241,53,0.2)', borderRadius: 6,
+              color: LIME, fontSize: 12, fontWeight: 600, cursor: 'pointer', marginBottom: 16,
+            }}
+          >
+            ✎ Редактировать
+          </button>
+
+          <InfoRow label="Дата рождения" value={athlete.birthDate} />
+          <InfoRow label="Возраст" value={athlete.age !== null ? `${athlete.age} лет` : ''} />
+          <InfoRow label="Телефон" value={athlete.phone} />
+          <InfoRow label="Родители" value={athlete.parents} />
+          <InfoRow label="Тел. родителей" value={athlete.parentPhone} />
+          <InfoRow label="Группа" value={athlete.group} />
+          <InfoRow label="С нами" value={athlete.trainingStart} />
+
+          <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #1e2230' }}>
+            <div style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Антропометрия</div>
+            <InfoRow label="Рост" value={athlete.height ? `${athlete.height} см` : ''} />
+            <InfoRow label="Вес" value={athlete.weight ? `${athlete.weight} кг` : ''} />
+            <InfoRow label="Размах рук" value={athlete.armSpan ? `${athlete.armSpan} см` : ''} />
+            <InfoRow label="Длина ноги" value={athlete.legLength ? `${athlete.legLength} см` : ''} />
+            <InfoRow label="Размер обуви" value={athlete.shoeSize ? String(athlete.shoeSize) : ''} />
+          </div>
+
+          {athleteInjuries.filter(i => i.status === 'active').length > 0 && (
+            <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #1e2230' }}>
+              <div style={{ fontSize: 11, color: '#f87171', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Активные травмы</div>
+              {athleteInjuries.filter(i => i.status === 'active').map(i => (
+                <div key={i.id} style={{ fontSize: 12, color: '#f87171', marginBottom: 4 }}>
+                  • {i.name} ({i.dateInjured})
+                </div>
+              ))}
+            </div>
           )}
         </div>
 
+        {/* Right content */}
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-            <h2 style={{
-              fontFamily: "'Barlow Condensed', sans-serif",
-              fontSize: 32,
-              fontWeight: 800,
-              color: '#f0f2f5',
-              margin: 0,
-              letterSpacing: '0.01em',
-            }}>{athlete.name}</h2>
-            <span style={{
-              padding: '3px 10px',
-              borderRadius: 6,
-              background: athlete.status === 'active' ? 'rgba(198,241,53,0.12)' : athlete.status === 'injured' ? 'rgba(248,113,113,0.12)' : 'rgba(107,114,128,0.12)',
-              color: athlete.status === 'active' ? LIME : athlete.status === 'injured' ? '#f87171' : '#6b7280',
-              fontSize: 11,
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-            }}>
-              {athlete.status === 'active' ? 'Активен' : athlete.status === 'injured' ? 'Травма' : 'Неактивен'}
-            </span>
-          </div>
-          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
             {[
-              { label: 'Возраст', val: athlete.age !== null ? `${athlete.age} лет` : '—' },
-              { label: 'Разряд', val: athlete.grade || '—' },
-              { label: 'Группа', val: athlete.group || '—' },
-              { label: 'Специализация', val: athlete.gender === 'F' ? 'Семиборье' : 'Десятиборье' },
-            ].map(f => (
-              <div key={f.label}>
-                <span style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{f.label}: </span>
-                <span style={{ fontSize: 13, color: '#f0f2f5', fontWeight: 500 }}>{f.val}</span>
+              { key: 'results', label: 'Результаты' },
+              { key: 'decathlon', label: athlete.gender === 'F' ? 'Семиборье' : 'Десятиборье' },
+              { key: 'chart', label: 'График' },
+              { key: 'injuries', label: `Травмы (${athleteInjuries.filter(i => i.status === 'active').length})` },
+            ].map(t => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key as any)}
+                style={{
+                  padding: '8px 16px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                  fontSize: 12, fontWeight: 600,
+                  background: tab === t.key ? 'rgba(198,241,53,0.12)' : 'rgba(20,23,32,0.6)',
+                  color: tab === t.key ? LIME : '#9ca3af',
+                }}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ background: 'rgba(15,17,23,0.8)', border: '1px solid #1e2230', borderRadius: 12, padding: '20px', backdropFilter: 'blur(12px)' }}>
+            {tab === 'results' && <ResultsTab results={athleteResults} />}
+            {tab === 'decathlon' && <DecathlonTab athlete={athlete} results={athleteResults} />}
+            {tab === 'chart' && <ChartTab results={athleteResults} />}
+            {tab === 'injuries' && <InjuriesTab athleteId={athlete.id} />}
+          </div>
+        </div>
+      </div>
+
+      {showEdit && <EditModal athlete={athlete} onClose={() => setShowEdit(false)} onSave={() => setShowEdit(false)} />}
+    </div>
+  );
+}
+
+/* ========== Edit Modal ========== */
+function EditModal({ athlete, onClose, onSave }: { athlete: any; onClose: () => void; onSave: () => void }) {
+  const { updateAthlete } = useAthletes();
+  const [formError, setFormError] = useState('');
+  const [photoPreview, setPhotoPreview] = useState<string | null>(athlete.photo || null);
+
+  const [form, setForm] = useState({
+    name: athlete.name,
+    nameShort: athlete.nameShort,
+    birthDate: athlete.birthDate,
+    gender: athlete.gender,
+    grade: athlete.grade,
+    group: athlete.group,
+    specialization: athlete.specialization,
+    phone: athlete.phone,
+    parents: athlete.parents,
+    parentPhone: athlete.parentPhone,
+    height: athlete.height ?? '',
+    weight: athlete.weight ?? '',
+    armSpan: athlete.armSpan ?? '',
+    legLength: athlete.legLength ?? '',
+    shoeSize: athlete.shoeSize ?? '',
+    trainingStart: athlete.trainingStart,
+    status: athlete.status,
+    photoFile: null as File | null,
+  });
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setForm({ ...form, photoFile: file });
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setPhotoPreview(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSubmit = async () => {
+    setFormError('');
+    const { error } = await updateAthlete(athlete.id, {
+      name: form.name,
+      nameShort: form.nameShort,
+      birthDate: form.birthDate || undefined,
+      gender: form.gender,
+      grade: form.grade || undefined,
+      group: form.group || undefined,
+      specialization: form.specialization,
+      phone: form.phone || undefined,
+      parents: form.parents || undefined,
+      parentPhone: form.parentPhone || undefined,
+      height: form.height ? Number(form.height) : undefined,
+      weight: form.weight ? Number(form.weight) : undefined,
+      armSpan: form.armSpan ? Number(form.armSpan) : undefined,
+      legLength: form.legLength ? Number(form.legLength) : undefined,
+      shoeSize: form.shoeSize ? Number(form.shoeSize) : undefined,
+      trainingStart: form.trainingStart || undefined,
+      photoFile: form.photoFile || undefined,
+    });
+    if (error) {
+      setFormError(error);
+    } else {
+      onSave();
+    }
+  };
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 1000, backdropFilter: 'blur(4px)',
+    }} onClick={onClose}>
+      <div style={{
+        background: '#141720', border: '1px solid #1e2230', borderRadius: 16,
+        padding: '32px', maxWidth: 640, width: '100%', maxHeight: '90vh', overflowY: 'auto',
+      }} onClick={e => e.stopPropagation()}>
+        <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 24, fontWeight: 700, color: '#f0f2f5', margin: '0 0 20px' }}>
+          Редактировать спортсмена
+        </h2>
+
+        {formError && (
+          <div style={{ padding: '10px 14px', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 8, color: '#f87171', fontSize: 13, marginBottom: 16 }}>
+            {formError}
+          </div>
+        )}
+
+        {/* Фото */}
+        <div style={{ marginBottom: 16, textAlign: 'center' }}>
+          <div style={{ width: 80, height: 80, borderRadius: '50%', margin: '0 auto 8px', overflow: 'hidden', background: '#1e2230', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px dashed #2a3040' }}>
+            {photoPreview ? (
+              <img src={photoPreview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <span style={{ color: '#6b7280', fontSize: 24 }}>📷</span>
+            )}
+          </div>
+          <label style={{ cursor: 'pointer', fontSize: 12, color: LIME, textDecoration: 'underline' }}>
+            {photoPreview ? 'Изменить фото' : 'Загрузить фото'}
+            <input type="file" accept="image/*" onChange={handlePhotoChange} style={{ display: 'none' }} />
+          </label>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>ФИО</label>
+            <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>Короткое имя</label>
+            <input value={form.nameShort} onChange={e => setForm({ ...form, nameShort: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }} />
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>Пол</label>
+            <select value={form.gender} onChange={e => setForm({ ...form, gender: e.target.value as 'M' | 'F' })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }}>
+              <option value="M">Мужской</option>
+              <option value="F">Женский</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>Дата рождения</label>
+            <input type="date" value={form.birthDate} onChange={e => setForm({ ...form, birthDate: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>Статус</label>
+            <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value as any })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }}>
+              <option value="active">Активен</option>
+              <option value="injured">Травма</option>
+              <option value="inactive">Неактивен</option>
+            </select>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>Разряд</label>
+            <input value={form.grade} onChange={e => setForm({ ...form, grade: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>Группа</label>
+            <input value={form.group} onChange={e => setForm({ ...form, group: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }} />
+          </div>
+        </div>
+
+        {/* Контакты */}
+        <div style={{ marginBottom: 12, padding: '12px', background: 'rgba(20,23,32,0.5)', borderRadius: 8, border: '1px solid #1e2230' }}>
+          <div style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Контакты</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>Телефон спортсмена</label>
+              <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>Телефон родителей</label>
+              <input value={form.parentPhone} onChange={e => setForm({ ...form, parentPhone: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }} />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>Родители (ФИО)</label>
+              <input value={form.parents} onChange={e => setForm({ ...form, parents: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }} />
+            </div>
+          </div>
+        </div>
+
+        {/* Антропометрия */}
+        <div style={{ marginBottom: 12, padding: '12px', background: 'rgba(20,23,32,0.5)', borderRadius: 8, border: '1px solid #1e2230' }}>
+          <div style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Антропометрия</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+            {[
+              { label: 'Рост, см', key: 'height' as const },
+              { label: 'Вес, кг', key: 'weight' as const },
+              { label: 'Размах, см', key: 'armSpan' as const },
+              { label: 'Нога, см', key: 'legLength' as const },
+              { label: 'Обувь', key: 'shoeSize' as const },
+            ].map(field => (
+              <div key={field.key}>
+                <label style={{ display: 'block', fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>{field.label}</label>
+                <input
+                  type="number"
+                  value={form[field.key]}
+                  onChange={e => setForm({ ...form, [field.key]: e.target.value })}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }}
+                />
               </div>
             ))}
           </div>
-          {athlete.coachComment && (
-            <div style={{ marginTop: 8, fontSize: 12, color: '#6b7280', fontStyle: 'italic' }}>
-              "{athlete.coachComment}"
-            </div>
-          )}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, minWidth: 260 }}>
-          {[
-            { l: 'Рост', v: athlete.height ? `${athlete.height} см` : '—' },
-            { l: 'Вес', v: athlete.weight ? `${athlete.weight} кг` : '—' },
-            { l: 'Размах', v: athlete.armSpan ? `${athlete.armSpan} см` : '—' },
-            { l: 'Нога', v: athlete.legLength ? `${athlete.legLength} см` : '—' },
-            { l: 'Обувь', v: athlete.shoeSize ? `${athlete.shoeSize} EU` : '—' },
-            { l: 'С нами', v: athlete.trainingStart ? athlete.trainingStart.slice(0, 4) : '—' },
-          ].map(s => (
-            <div key={s.l} style={{ textAlign: 'center', padding: '8px', background: 'rgba(20,23,32,0.5)', borderRadius: 6 }}>
-              <div style={{ fontSize: 9, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>{s.l}</div>
-              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, color: '#f0f2f5' }}>{s.v}</div>
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>С нами с</label>
+          <input type="date" value={form.trainingStart} onChange={e => setForm({ ...form, trainingStart: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }} />
+        </div>
+
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={{ padding: '8px 16px', background: 'transparent', border: '1px solid #1e2230', borderRadius: 6, color: '#9ca3af', cursor: 'pointer' }}>
+            Отмена
+          </button>
+          <button onClick={handleSubmit} style={{ padding: '8px 16px', background: '#c6f135', border: 'none', borderRadius: 6, color: '#080a0f', fontWeight: 600, cursor: 'pointer' }}>
+            Сохранить
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ========== Tabs ========== */
+function ResultsTab({ results }: { results: any[] }) {
+  if (results.length === 0) return <EmptyState text="Нет результатов" />;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {results.map(r => (
+        <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: 'rgba(20,23,32,0.5)', borderRadius: 8 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f2f5' }}>{r.discipline}</div>
+            <div style={{ fontSize: 11, color: '#6b7280' }}>{r.date} · {r.location}</div>
+          </div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 700, color: LIME }}>
+            {r.result} <span style={{ fontSize: 11, color: '#6b7280' }}>{r.unit}</span>
+          </div>
+          <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 3, background: r.type === 'competition' ? 'rgba(167,139,250,0.15)' : 'rgba(96,165,250,0.1)', color: r.type === 'competition' ? '#a78bfa' : '#60a5fa', textTransform: 'uppercase', fontWeight: 600 }}>
+            {r.type === 'competition' ? 'Старт' : 'Тест'}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DecathlonTab({ athlete, results }: { athlete: any; results: any[] }) {
+  const events = athlete.gender === 'F' ? heptathlonEvents : decathlonEvents;
+  const best: Record<string, { val: number; pts: number }> = {};
+
+  results.forEach(r => {
+    const ev = events.find(e => e.name === r.discipline || e.id === r.discipline);
+    if (!ev) return;
+    const pts = calcDecathlonPoints(ev, r.resultValue);
+    if (!best[r.discipline] || pts > best[r.discipline].pts) {
+      best[r.discipline] = { val: r.resultValue, pts };
+    }
+  });
+
+  const total = Object.values(best).reduce((s, b) => s + b.pts, 0);
+  const entries = Object.entries(best).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.pts - a.pts);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 800, color: '#f0f2f5' }}>
+          {total.toLocaleString('ru')} <span style={{ fontSize: 14, color: '#6b7280' }}>очков</span>
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {entries.map((e, i) => (
+          <div key={e.name} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: 'rgba(20,23,32,0.5)', borderRadius: 8 }}>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#6b7280', width: 24 }}>#{i + 1}</span>
+            <div style={{ flex: 1, fontSize: 13, color: '#f0f2f5' }}>{e.name}</div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, color: LIME }}>{e.val}</div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#9ca3af', width: 50, textAlign: 'right' }}>{e.pts} pts</div>
+          </div>
+        ))}
+        {entries.length === 0 && <EmptyState text="Нет данных для расчёта" />}
+      </div>
+    </div>
+  );
+}
+
+function ChartTab({ results }: { results: any[] }) {
+  if (results.length < 2) return <EmptyState text="Недостаточно данных для графика" />;
+  const data = results.map(r => ({ date: r.date.slice(5), value: r.resultValue }));
+  return (
+    <ResponsiveContainer width="100%" height={250}>
+      <LineChart data={data}>
+        <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
+        <Tooltip contentStyle={{ background: '#141720', border: '1px solid #1e2230', borderRadius: 8, color: '#f0f2f5' }} />
+        <Line type="monotone" dataKey="value" stroke={LIME} strokeWidth={2} dot={{ fill: LIME, r: 3 }} />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+/* ========== Injuries Tab ========== */
+function InjuriesTab({ athleteId }: { athleteId: string }) {
+  const { injuries, addInjury, updateInjury, deleteInjury } = useAthletes();
+  const [showAdd, setShowAdd] = useState(false);
+
+  const athleteInjuries = injuries.filter(i => i.athleteId === athleteId);
+
+  const [form, setForm] = useState({
+    name: '',
+    dateInjured: '',
+    dateHealed: '',
+    description: '',
+  });
+
+  const handleAdd = async () => {
+    if (!form.name.trim() || !form.dateInjured) return;
+    const { error } = await addInjury(athleteId, {
+      name: form.name,
+      dateInjured: form.dateInjured,
+      dateHealed: form.dateHealed || undefined,
+      description: form.description,
+    });
+    if (!error) {
+      setShowAdd(false);
+      setForm({ name: '', dateInjured: '', dateHealed: '', description: '' });
+    }
+  };
+
+  const handleHeal = async (id: string) => {
+    const today = new Date().toISOString().slice(0, 10);
+    await updateInjury(id, { status: 'healed', dateHealed: today });
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ fontSize: 14, color: '#6b7280' }}>
+          {athleteInjuries.filter(i => i.status === 'active').length} активных · {athleteInjuries.filter(i => i.status === 'healed').length} перенесённых
+        </div>
+        <button
+          onClick={() => setShowAdd(true)}
+          style={{
+            padding: '6px 14px', background: 'rgba(198,241,53,0.08)',
+            border: '1px solid rgba(198,241,53,0.2)', borderRadius: 6,
+            color: LIME, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+          }}
+        >
+          + Добавить травму
+        </button>
+      </div>
+
+      {showAdd && (
+        <div style={{
+          padding: '16px', background: 'rgba(20,23,32,0.6)', borderRadius: 10,
+          border: '1px solid #1e2230', marginBottom: 16,
+        }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>Название травмы *</label>
+              <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Растяжение связок" style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5', fontSize: 12 }} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>Дата получения *</label>
+              <input type="date" value={form.dateInjured} onChange={e => setForm({ ...form, dateInjured: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5', fontSize: 12 }} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>Дата излечения</label>
+              <input type="date" value={form.dateHealed} onChange={e => setForm({ ...form, dateHealed: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5', fontSize: 12 }} />
+            </div>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>Описание / лечение</label>
+            <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Описание травмы, назначенное лечение..." rows={2} style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5', fontSize: 12, resize: 'vertical' }} />
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button onClick={() => setShowAdd(false)} style={{ padding: '6px 12px', background: 'transparent', border: '1px solid #1e2230', borderRadius: 6, color: '#9ca3af', cursor: 'pointer', fontSize: 12 }}>Отмена</button>
+            <button onClick={handleAdd} style={{ padding: '6px 12px', background: '#c6f135', border: 'none', borderRadius: 6, color: '#080a0f', fontWeight: 600, cursor: 'pointer', fontSize: 12 }}>Добавить</button>
+          </div>
+        </div>
+      )}
+
+      {athleteInjuries.length === 0 ? (
+        <EmptyState text="Травм не зафиксировано" />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {athleteInjuries.map(injury => (
+            <div key={injury.id} style={{
+              padding: '12px 14px', background: 'rgba(20,23,32,0.5)', borderRadius: 8,
+              border: `1px solid ${injury.status === 'active' ? 'rgba(248,113,113,0.2)' : '#1e2230'}`,
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: injury.status === 'active' ? '#f87171' : '#9ca3af' }}>
+                      {injury.name}
+                    </span>
+                    <span style={{
+                      fontSize: 9, padding: '2px 6px', borderRadius: 3, fontWeight: 600,
+                      background: injury.status === 'active' ? 'rgba(248,113,113,0.12)' : 'rgba(107,114,128,0.12)',
+                      color: injury.status === 'active' ? '#f87171' : '#6b7280',
+                      textTransform: 'uppercase', letterSpacing: '0.06em',
+                    }}>
+                      {injury.status === 'active' ? 'Активная' : 'Перенесённая'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4 }}>
+                    Получена: {injury.dateInjured}
+                    {injury.dateHealed && ` · Излечена: ${injury.dateHealed}`}
+                  </div>
+                  {injury.description && (
+                    <div style={{ fontSize: 12, color: '#9ca3af', fontStyle: 'italic' }}>
+                      {injury.description}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  {injury.status === 'active' && (
+                    <button
+                      onClick={() => handleHeal(injury.id)}
+                      style={{
+                        padding: '4px 10px', background: 'rgba(198,241,53,0.08)',
+                        border: '1px solid rgba(198,241,53,0.2)', borderRadius: 5,
+                        color: LIME, fontSize: 11, cursor: 'pointer', fontWeight: 600,
+                      }}
+                    >
+                      Вылечена
+                    </button>
+                  )}
+                  <button
+                    onClick={() => deleteInjury(injury.id)}
+                    style={{
+                      padding: '4px 10px', background: 'transparent',
+                      border: '1px solid #1e2230', borderRadius: 5,
+                      color: '#6b7280', fontSize: 11, cursor: 'pointer',
+                    }}
+                  >
+                    Удалить
+                  </button>
+                </div>
+              </div>
             </div>
           ))}
         </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: 'rgba(15,17,23,0.6)', borderRadius: 10, padding: 4, border: '1px solid #1e2230', width: 'fit-content' }}>
-        {tabs.map(t => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            style={{
-              padding: '8px 18px',
-              borderRadius: 7,
-              border: 'none',
-              background: tab === t ? 'rgba(198,241,53,0.12)' : 'transparent',
-              color: tab === t ? LIME : '#6b7280',
-              fontWeight: tab === t ? 600 : 400,
-              fontSize: 13,
-              cursor: 'pointer',
-              fontFamily: "'Inter', sans-serif",
-              transition: 'all 0.15s',
-              borderBottom: tab === t ? `1.5px solid ${LIME}` : '1.5px solid transparent',
-            }}
-          >{t}</button>
-        ))}
-      </div>
-
-      <div style={{
-        background: 'rgba(15,17,23,0.8)',
-        border: '1px solid #1e2230',
-        borderRadius: 12,
-        padding: '24px',
-        backdropFilter: 'blur(12px)',
-        animation: 'fadeIn 0.25s ease',
-      }}>
-        {tab === 'Обзор' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-            <div>
-              <h3 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.06em', margin: '0 0 14px', textTransform: 'uppercase' }}>Контакты</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {[
-                  { label: 'Телефон', value: athlete.phone || '—' },
-                  { label: 'Родители', value: athlete.parents || '—' },
-                  { label: 'Тел. родителей', value: athlete.parentPhone || '—' },
-                  { label: 'Дата рождения', value: athlete.birthDate || '—' },
-                  { label: 'Аллергии', value: athlete.allergies || '—' },
-                ].map(f => (
-                  <div key={f.label} style={{ display: 'flex', gap: 12 }}>
-                    <span style={{ fontSize: 12, color: '#6b7280', minWidth: 130 }}>{f.label}</span>
-                    <span style={{ fontSize: 12, color: '#d1d5db' }}>{f.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div>
-              <h3 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.06em', margin: '0 0 14px', textTransform: 'uppercase' }}>Цели</h3>
-              <div style={{ fontSize: 13, color: '#d1d5db', lineHeight: 1.7, padding: '12px 14px', background: 'rgba(20,23,32,0.5)', borderRadius: 8, border: '1px solid #1e2230' }}>
-                {athlete.goals || 'Цели пока не заданы.'}
-              </div>
-              <h3 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.06em', margin: '20px 0 14px', textTransform: 'uppercase' }}>Любимая дисциплина</h3>
-              <div style={{ fontSize: 14, color: LIME, fontWeight: 600 }}>{athlete.favoriteEvent || '—'}</div>
-            </div>
-          </div>
-        )}
-        {tab === 'Результаты' && <ResultsTab athlete={athlete} />}
-        {tab === 'Медицина' && (
-          <div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
-              <StatBadge label="Статус" value={athlete.status === 'injured' ? 'Травма' : 'Допущен'} />
-              <StatBadge label="Мед. ограничения" value={athlete.medicalNotes || '—'} />
-              <StatBadge label="Аллергии" value={athlete.allergies || '—'} />
-            </div>
-            <EmptyState text="История травм и медосмотров пока не ведётся — этот раздел появится позже." />
-          </div>
-        )}
-        {tab === 'Многоборье' && <DecathlonTab athlete={athlete} />}
-      </div>
+      )}
     </div>
-  )
+  );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return <div style={{ textAlign: 'center', padding: '40px 0', color: '#4b5563', fontSize: 13 }}>{text}</div>;
 }

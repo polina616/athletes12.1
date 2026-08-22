@@ -57,40 +57,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return newProfile;
   };
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchCoachProfile(
-          session.user.id, 
-          session.user.email, 
-          session.user.user_metadata?.name as string
-        ).then(profile => {
-          setCoachProfile(profile);
-          setLoading(false);
-        });
-      } else {
-        setLoading(false);
-      }
-    });
+    useEffect(() => {
+    let isMounted = true;
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!isMounted) return;
+
       setSession(session);
       setUser(session?.user ?? null);
+
       if (session?.user) {
-        fetchCoachProfile(
+        const profile = await fetchCoachProfile(
           session.user.id,
-          session.user.email,
-          session.user.user_metadata?.name as string
-        ).then(profile => setCoachProfile(profile));
+          session.user.email ?? undefined,
+          session.user.user_metadata?.name as string | undefined
+        );
+        if (!isMounted) return;
+        setCoachProfile(profile);
       } else {
         setCoachProfile(null);
       }
-      setLoading(false);
+
+      if (isMounted) setLoading(false);
+    };
+
+    init();
+
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!isMounted) return;
+      setSession(session);
+      setUser(session?.user ?? null);
+
+      if (session?.user) {
+        const profile = await fetchCoachProfile(
+          session.user.id,
+          session.user.email ?? undefined,
+          session.user.user_metadata?.name as string | undefined
+        );
+        if (!isMounted) return;
+        setCoachProfile(profile);
+      } else {
+        setCoachProfile(null);
+      }
+      if (isMounted) setLoading(false);
     });
 
-    return () => listener?.subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      listener?.subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
