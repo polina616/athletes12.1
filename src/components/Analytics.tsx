@@ -1,11 +1,15 @@
+import { useState, useEffect } from 'react'
 import {
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
 import { useAthletes } from '../contexts/Athletescontext'
-import { athleteTotalPoints, resultsByMonth, teamPointsTrend, progressLeaders, decliningAthletes } from '../lib/Scoring'
+import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../lib/supabaseClient'
+import { athleteTotalPoints, resultsByMonth, teamPointsTrend, progressLeaders, decliningAthletes, disciplineLeaders } from '../lib/Scoring'
 import { IconTrend } from './Icons'
 
 const LIME = '#c6f135'
+const PURPLE = '#a78bfa'
 
 function EmptyBlock({ text }: { text: string }) {
   return (
@@ -23,8 +27,52 @@ function EmptyRow({ text }: { text: string }) {
   )
 }
 
+const tooltipStyle = {
+  background: '#141720',
+  border: '1px solid #1e2230',
+  borderRadius: 8,
+  fontSize: 12,
+  boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+}
+
+const gridProps = {
+  stroke: '#1e2230',
+  strokeDasharray: '3 3',
+  vertical: false,
+}
+
 export default function Analytics() {
   const { athletes, results, loading } = useAthletes()
+  const { coachProfile } = useAuth()
+
+  const [controlEventsCount, setControlEventsCount] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!coachProfile) {
+      setControlEventsCount(null)
+      return
+    }
+    let cancelled = false
+    const fetchControlEventsCount = async () => {
+      const yearStart = `${new Date().getFullYear()}-01-01`
+      const today = new Date().toISOString().slice(0, 10)
+      const { count, error } = await supabase
+        .from('control_events')
+        .select('id', { count: 'exact', head: true })
+        .eq('coach_id', coachProfile.id)
+        .gte('date', yearStart)
+        .lte('date', today)
+      if (cancelled) return
+      if (error) {
+        console.error('Ошибка загрузки количества зачётов:', error)
+        setControlEventsCount(null)
+      } else {
+        setControlEventsCount(count ?? 0)
+      }
+    }
+    fetchControlEventsCount()
+    return () => { cancelled = true }
+  }, [coachProfile])
 
   const scored = athletes
     .map(a => ({ athlete: a, pts: athleteTotalPoints(a, results) }))
@@ -40,8 +88,8 @@ export default function Analytics() {
 
   const kpiCards = [
     { l: 'Средние очки', v: avgPoints !== null ? avgPoints.toLocaleString('ru') : '—', sub: scored.length > 0 ? `по ${scored.length} спортсменам` : 'нет данных', color: LIME },
-    { l: 'Лучший результат', v: best ? best.pts.toLocaleString('ru') : '—', sub: best ? (best.athlete.nameShort || best.athlete.name) : 'нет данных', color: '#a78bfa' },
-    { l: 'Результатов внесено', v: String(results.length), sub: 'с начала сезона', color: '#60a5fa' },
+    { l: 'Лучший результат', v: best ? best.pts.toLocaleString('ru') : '—', sub: best ? (best.athlete.nameShort || best.athlete.name) : 'нет данных', color: PURPLE },
+    { l: 'Зачётов проведено', v: controlEventsCount !== null ? String(controlEventsCount) : '—', sub: 'с начала года', color: '#60a5fa' },
     { l: 'Спортсменов с данными', v: `${athletesWithResults}/${athletes.length}`, sub: 'внесли результаты', color: '#fbbf24' },
   ]
 
@@ -61,6 +109,7 @@ export default function Analytics() {
   const trend = teamPointsTrend(athletes, results)
   const progressList = progressLeaders(athletes, results, 5)
   const declineList = decliningAthletes(athletes, results, 5)
+  const leadersByDiscipline = disciplineLeaders(athletes, results)
 
   return (
     <div style={{ animation: 'fadeIn 0.35s ease forwards' }}>
@@ -97,12 +146,19 @@ export default function Analytics() {
       <div style={{ background: 'rgba(15,17,23,0.8)', border: '1px solid #1e2230', borderRadius: 12, padding: '20px', backdropFilter: 'blur(12px)', marginBottom: 16 }}>
         <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, color: '#f0f2f5', letterSpacing: '0.04em', marginBottom: 16 }}>АКТИВНОСТЬ ПО МЕСЯЦАМ</div>
         {activity.length > 0 ? (
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={activity}>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={activity} barCategoryGap="35%">
+              <defs>
+                <linearGradient id="activityGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={LIME} stopOpacity={0.9} />
+                  <stop offset="100%" stopColor={LIME} stopOpacity={0.35} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid {...gridProps} />
               <XAxis dataKey="month" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis allowDecimals={false} tick={{ fill: '#6b7280', fontSize: 10, fontFamily: "'JetBrains Mono'" }} axisLine={false} tickLine={false} width={30} />
-              <Tooltip contentStyle={{ background: '#141720', border: '1px solid #1e2230', borderRadius: 8, fontSize: 12 }} />
-              <Bar dataKey="count" name="Результатов" fill={LIME} fillOpacity={0.7} radius={[3, 3, 0, 0]} />
+              <Tooltip cursor={{ fill: 'rgba(198,241,53,0.04)' }} contentStyle={tooltipStyle} />
+              <Bar dataKey="count" name="Результатов" fill="url(#activityGradient)" maxBarSize={56} radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         ) : (
@@ -114,13 +170,20 @@ export default function Analytics() {
       <div style={{ background: 'rgba(15,17,23,0.8)', border: '1px solid #1e2230', borderRadius: 12, padding: '20px', backdropFilter: 'blur(12px)', marginBottom: 16 }}>
         <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, color: '#f0f2f5', letterSpacing: '0.04em', marginBottom: 16 }}>ПРОГРЕСС КОМАНДЫ</div>
         {trend.length > 1 ? (
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={trend}>
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={trend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="teamProgressGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={LIME} stopOpacity={0.35} />
+                  <stop offset="100%" stopColor={LIME} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid {...gridProps} />
               <XAxis dataKey="month" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis allowDecimals={false} tick={{ fill: '#6b7280', fontSize: 10, fontFamily: "'JetBrains Mono'" }} axisLine={false} tickLine={false} width={40} />
-              <Tooltip contentStyle={{ background: '#141720', border: '1px solid #1e2230', borderRadius: 8, fontSize: 12 }} />
-              <Line type="monotone" dataKey="avg" name="Средние очки" stroke={LIME} strokeWidth={2} dot={{ fill: LIME, r: 3 }} />
-            </LineChart>
+              <YAxis allowDecimals={false} tick={{ fill: '#6b7280', fontSize: 10, fontFamily: "'JetBrains Mono'" }} axisLine={false} tickLine={false} width={44} domain={['dataMin - 100', 'dataMax + 100']} />
+              <Tooltip contentStyle={tooltipStyle} />
+              <Area type="monotone" dataKey="avg" name="Средние очки" stroke={LIME} strokeWidth={2.5} fill="url(#teamProgressGradient)" dot={{ fill: LIME, r: 3, strokeWidth: 0 }} activeDot={{ r: 5, fill: LIME }} />
+            </AreaChart>
           </ResponsiveContainer>
         ) : (
           <EmptyBlock text="Недостаточно данных для графика прогресса команды" />
@@ -181,12 +244,19 @@ export default function Analytics() {
       <div style={{ background: 'rgba(15,17,23,0.8)', border: '1px solid #1e2230', borderRadius: 12, padding: '20px', backdropFilter: 'blur(12px)', marginBottom: 16 }}>
         <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, color: '#f0f2f5', letterSpacing: '0.04em', marginBottom: 16 }}>РЕЗУЛЬТАТЫ ПО ДИСЦИПЛИНАМ</div>
         {disciplineVolume.length > 0 ? (
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={disciplineVolume} layout="vertical" margin={{ left: 24 }}>
+          <ResponsiveContainer width="100%" height={disciplineVolume.length * 34 + 40}>
+            <BarChart data={disciplineVolume} layout="vertical" margin={{ left: 24 }} barCategoryGap="30%">
+              <defs>
+                <linearGradient id="disciplineGradient" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor={PURPLE} stopOpacity={0.5} />
+                  <stop offset="100%" stopColor={PURPLE} stopOpacity={0.9} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="#1e2230" strokeDasharray="3 3" horizontal={false} />
               <XAxis type="number" allowDecimals={false} tick={{ fill: '#6b7280', fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis type="category" dataKey="discipline" tick={{ fill: '#9ca3af', fontSize: 11 }} axisLine={false} tickLine={false} width={140} />
-              <Tooltip contentStyle={{ background: '#141720', border: '1px solid #1e2230', borderRadius: 8, fontSize: 12 }} />
-              <Bar dataKey="count" name="Результатов" fill="#a78bfa" fillOpacity={0.75} radius={[0, 3, 3, 0]} />
+              <Tooltip cursor={{ fill: 'rgba(167,139,250,0.04)' }} contentStyle={tooltipStyle} />
+              <Bar dataKey="count" name="Результатов" fill="url(#disciplineGradient)" maxBarSize={22} radius={[0, 6, 6, 0]} />
             </BarChart>
           </ResponsiveContainer>
         ) : (
@@ -194,7 +264,43 @@ export default function Analytics() {
         )}
       </div>
 
-      {/* Leaders table */}
+      {/* Leaders by discipline */}
+      <div style={{ background: 'rgba(15,17,23,0.8)', border: '1px solid #1e2230', borderRadius: 12, overflow: 'hidden', backdropFilter: 'blur(12px)', marginBottom: 16 }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #1e2230' }}>
+          <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, color: '#f0f2f5', letterSpacing: '0.04em' }}>ЛИДЕРЫ ПО ДИСЦИПЛИНАМ</span>
+        </div>
+        {leadersByDiscipline.length > 0 ? (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #1e2230' }}>
+                {['Дисциплина', 'Лидер', 'Результат', 'Прогресс'].map(h => (
+                  <th key={h} style={{ padding: '10px 16px', textAlign: 'left', color: '#6b7280', fontWeight: 500, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {leadersByDiscipline.map((l, i) => (
+                <tr key={l.discipline} style={{ borderBottom: i < leadersByDiscipline.length - 1 ? '1px solid rgba(30,34,48,0.5)' : 'none' }}>
+                  <td style={{ padding: '12px 16px', color: '#f0f2f5', fontWeight: 500 }}>{l.discipline}</td>
+                  <td style={{ padding: '12px 16px', color: '#9ca3af' }}>{l.athlete.nameShort || l.athlete.name}</td>
+                  <td style={{ padding: '12px 16px', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: LIME, fontSize: 15 }}>
+                    {l.result}<span style={{ fontSize: 11, color: '#6b7280', marginLeft: 4 }}>{l.unit}</span>
+                  </td>
+                  <td style={{ padding: '12px 16px' }}>
+                    <div style={{ height: 4, background: '#1e2230', borderRadius: 2, maxWidth: 120 }}>
+                      <div style={{ height: '100%', width: `${l.marginPercent}%`, background: LIME, borderRadius: 2 }} />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <EmptyBlock text="Нет данных для рейтинга по дисциплинам" />
+        )}
+      </div>
+
+      {/* Overall ranking table */}
       <div style={{ background: 'rgba(15,17,23,0.8)', border: '1px solid #1e2230', borderRadius: 12, overflow: 'hidden', backdropFilter: 'blur(12px)' }}>
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #1e2230' }}>
           <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, color: '#f0f2f5', letterSpacing: '0.04em' }}>РЕЙТИНГ ПО ОЧКАМ МНОГОБОРЬЯ</span>

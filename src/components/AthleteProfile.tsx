@@ -1,8 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAthletes, Injury } from '../contexts/Athletescontext';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabaseClient';
 import { calcDecathlonPoints, decathlonEvents, heptathlonEvents } from '../data/mockData';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { athleteCategoryProfile, RU_MONTHS_SHORT } from '../lib/Scoring';
+import { categorizeDiscipline, DISCIPLINE_CATEGORY_ORDER } from '../lib/controlEventUtils';
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
+} from 'recharts';
 import { IconArrowLeft, IconUser } from './Icons';
 
 const LIME = '#c6f135';
@@ -11,7 +18,7 @@ export default function AthleteProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { athletes, results, injuries, updateAthlete, addInjury, updateInjury, deleteInjury } = useAthletes();
-  const [tab, setTab] = useState<'results' | 'decathlon' | 'chart' | 'injuries'>('results');
+  const [tab, setTab] = useState<'results' | 'decathlon' | 'profile' | 'attendance' | 'injuries'>('results');
   const [showEdit, setShowEdit] = useState(false);
 
   const athlete = athletes.find(a => a.id === id);
@@ -112,11 +119,12 @@ export default function AthleteProfile() {
 
         {/* Right content */}
         <div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
             {[
               { key: 'results', label: 'Результаты' },
               { key: 'decathlon', label: athlete.gender === 'F' ? 'Семиборье' : 'Десятиборье' },
-              { key: 'chart', label: 'График' },
+              { key: 'profile', label: 'Профиль' },
+              { key: 'attendance', label: 'Посещаемость' },
               { key: 'injuries', label: `Травмы (${athleteInjuries.filter(i => i.status === 'active').length})` },
             ].map(t => (
               <button
@@ -137,7 +145,8 @@ export default function AthleteProfile() {
           <div style={{ background: 'rgba(15,17,23,0.8)', border: '1px solid #1e2230', borderRadius: 12, padding: '20px', backdropFilter: 'blur(12px)' }}>
             {tab === 'results' && <ResultsTab results={athleteResults} />}
             {tab === 'decathlon' && <DecathlonTab athlete={athlete} results={athleteResults} />}
-            {tab === 'chart' && <ChartTab results={athleteResults} />}
+            {tab === 'profile' && <ProfileTab athlete={athlete} results={athleteResults} />}
+            {tab === 'attendance' && <AttendanceTab athleteId={athlete.id} />}
             {tab === 'injuries' && <InjuriesTab athleteId={athlete.id} />}
           </div>
         </div>
@@ -356,22 +365,52 @@ function EditModal({ athlete, onClose, onSave }: { athlete: any; onClose: () => 
 /* ========== Tabs ========== */
 function ResultsTab({ results }: { results: any[] }) {
   if (results.length === 0) return <EmptyState text="Нет результатов" />;
+
+  const grouped = new Map<string, any[]>();
+  for (const r of results) {
+    const cat = categorizeDiscipline(r.discipline);
+    const arr = grouped.get(cat) || [];
+    arr.push(r);
+    grouped.set(cat, arr);
+  }
+
+  // Сначала категории в заданном порядке (если есть данные), затем всё остальное (на случай новых категорий).
+  const orderedCats = [
+    ...DISCIPLINE_CATEGORY_ORDER.filter(c => grouped.has(c)),
+    ...[...grouped.keys()].filter(c => !DISCIPLINE_CATEGORY_ORDER.includes(c)),
+  ];
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {results.map(r => (
-        <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: 'rgba(20,23,32,0.5)', borderRadius: 8 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f2f5' }}>{r.discipline}</div>
-            <div style={{ fontSize: 11, color: '#6b7280' }}>{r.date} · {r.location}</div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {orderedCats.map(cat => {
+        const items = [...grouped.get(cat)!].sort((a, b) => b.date.localeCompare(a.date));
+        return (
+          <div key={cat}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 14, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                {cat}
+              </span>
+              <span style={{ fontSize: 11, color: '#4b5563' }}>{items.length}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {items.map(r => (
+                <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: 'rgba(20,23,32,0.5)', borderRadius: 8 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f2f5' }}>{r.discipline}</div>
+                    <div style={{ fontSize: 11, color: '#6b7280' }}>{r.date} · {r.location}</div>
+                  </div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 700, color: LIME }}>
+                    {r.result} <span style={{ fontSize: 11, color: '#6b7280' }}>{r.unit}</span>
+                  </div>
+                  <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 3, background: 'rgba(96,165,250,0.1)', color: '#60a5fa', textTransform: 'uppercase', fontWeight: 600 }}>
+                    Тест
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 700, color: LIME }}>
-            {r.result} <span style={{ fontSize: 11, color: '#6b7280' }}>{r.unit}</span>
-          </div>
-          <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 3, background: 'rgba(96,165,250,0.1)', color: '#60a5fa', textTransform: 'uppercase', fontWeight: 600 }}>
-  Тест
-</span>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -414,18 +453,166 @@ function DecathlonTab({ athlete, results }: { athlete: any; results: any[] }) {
   );
 }
 
-function ChartTab({ results }: { results: any[] }) {
-  if (results.length < 2) return <EmptyState text="Недостаточно данных для графика" />;
-  const data = results.map(r => ({ date: r.date.slice(5), value: r.resultValue }));
+function ProfileTab({ athlete, results }: { athlete: any; results: any[] }) {
+  const data = athleteCategoryProfile(athlete, results);
+  const hasData = data.some(d => d.points > 0);
+
+  if (!hasData) return <EmptyState text="Внесите результаты хотя бы по одной дисциплине, чтобы построить профиль" />;
+
   return (
-    <ResponsiveContainer width="100%" height={250}>
-      <LineChart data={data}>
-        <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
-        <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
-        <Tooltip contentStyle={{ background: '#141720', border: '1px solid #1e2230', borderRadius: 8, color: '#f0f2f5' }} />
-        <Line type="monotone" dataKey="value" stroke={LIME} strokeWidth={2} dot={{ fill: LIME, r: 3 }} />
-      </LineChart>
-    </ResponsiveContainer>
+    <div>
+      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
+        Средние очки по официальным таблицам World Athletics в каждой группе дисциплин
+      </div>
+      <ResponsiveContainer width="100%" height={320}>
+        <RadarChart data={data} outerRadius="72%">
+          <PolarGrid stroke="#1e2230" />
+          <PolarAngleAxis dataKey="category" tick={{ fill: '#9ca3af', fontSize: 12 }} />
+          <PolarRadiusAxis tick={{ fill: '#4b5563', fontSize: 10 }} axisLine={false} tickCount={4} />
+          <Radar
+            name={athlete.nameShort || athlete.name}
+            dataKey="points"
+            stroke={LIME}
+            fill={LIME}
+            fillOpacity={0.32}
+            strokeWidth={2}
+            dot={{ fill: LIME, r: 3, strokeWidth: 0 }}
+          />
+          <Tooltip contentStyle={{ background: '#141720', border: '1px solid #1e2230', borderRadius: 8, color: '#f0f2f5', fontSize: 12 }} />
+        </RadarChart>
+      </ResponsiveContainer>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 4 }}>
+        {data.map(d => (
+          <div key={d.category} style={{ padding: '8px 10px', background: 'rgba(20,23,32,0.5)', borderRadius: 6, textAlign: 'center' }}>
+            <div style={{ fontSize: 10, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{d.category}</div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 700, color: d.points > 0 ? LIME : '#4b5563' }}>
+              {d.points > 0 ? d.points.toLocaleString('ru') : '—'}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+interface TrainingRow {
+  id: string
+  date: string
+  athlete_ids: string[]
+  attended_ids: string[]
+}
+
+function AttendanceTab({ athleteId }: { athleteId: string }) {
+  const { coachProfile } = useAuth();
+  const [trainings, setTrainings] = useState<TrainingRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!coachProfile) { setLoading(false); return; }
+    let cancelled = false;
+    const fetchTrainings = async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('trainings')
+        .select('id, date, athlete_ids, attended_ids')
+        .eq('coach_id', coachProfile.id)
+        .contains('athlete_ids', [athleteId])
+        .order('date', { ascending: true });
+      if (cancelled) return;
+      if (error) {
+        console.error('Ошибка загрузки посещаемости:', error);
+        setTrainings([]);
+      } else {
+        setTrainings((data || []).map(t => ({
+          id: t.id,
+          date: t.date,
+          athlete_ids: t.athlete_ids || [],
+          attended_ids: t.attended_ids || [],
+        })));
+      }
+      setLoading(false);
+    };
+    fetchTrainings();
+    return () => { cancelled = true; };
+  }, [coachProfile, athleteId]);
+
+  const monthly = useMemo(() => {
+    const map = new Map<string, { assigned: number; attended: number }>();
+    for (const t of trainings) {
+      const d = new Date(t.date);
+      if (isNaN(d.getTime())) continue;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const entry = map.get(key) || { assigned: 0, attended: 0 };
+      entry.assigned += 1;
+      if (t.attended_ids.includes(athleteId)) entry.attended += 1;
+      map.set(key, entry);
+    }
+    return [...map.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([key, v]) => {
+        const [, m] = key.split('-');
+        return { month: RU_MONTHS_SHORT[Number(m) - 1], Посещено: v.attended, Пропущено: v.assigned - v.attended };
+      });
+  }, [trainings, athleteId]);
+
+  if (loading) return <div style={{ color: '#6b7280', padding: '20px 0' }}>Загрузка...</div>;
+  if (trainings.length === 0) return <EmptyState text="Спортсмен пока не назначен ни на одну тренировку" />;
+
+  const totalAssigned = trainings.length;
+  const totalAttended = trainings.filter(t => t.attended_ids.includes(athleteId)).length;
+  const rate = totalAssigned > 0 ? Math.round((totalAttended / totalAssigned) * 100) : 0;
+
+  const recent = [...trainings].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
+
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
+        {[
+          { l: 'Назначено тренировок', v: totalAssigned },
+          { l: 'Посещено', v: totalAttended },
+          { l: 'Посещаемость', v: `${rate}%` },
+        ].map(k => (
+          <div key={k.l} style={{ padding: '12px', background: 'rgba(20,23,32,0.5)', borderRadius: 8, textAlign: 'center' }}>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 22, fontWeight: 700, color: LIME }}>{k.v}</div>
+            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{k.l}</div>
+          </div>
+        ))}
+      </div>
+
+      {monthly.length > 1 && (
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={monthly} barCategoryGap="30%">
+            <CartesianGrid stroke="#1e2230" strokeDasharray="3 3" vertical={false} />
+            <XAxis dataKey="month" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
+            <YAxis allowDecimals={false} tick={{ fill: '#6b7280', fontSize: 10, fontFamily: "'JetBrains Mono'" }} axisLine={false} tickLine={false} width={26} />
+            <Tooltip contentStyle={{ background: '#141720', border: '1px solid #1e2230', borderRadius: 8, color: '#f0f2f5', fontSize: 12 }} />
+            <Bar dataKey="Посещено" stackId="a" fill={LIME} fillOpacity={0.85} radius={[4, 4, 0, 0]} maxBarSize={40} />
+            <Bar dataKey="Пропущено" stackId="a" fill="#f87171" fillOpacity={0.35} radius={[4, 4, 0, 0]} maxBarSize={40} />
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+
+      <div style={{ marginTop: monthly.length > 1 ? 20 : 0 }}>
+        <div style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Последние тренировки</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {recent.map(t => {
+            const attended = t.attended_ids.includes(athleteId);
+            return (
+              <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'rgba(20,23,32,0.5)', borderRadius: 6 }}>
+                <span style={{ fontSize: 12, color: '#d1d5db', fontFamily: "'JetBrains Mono', monospace" }}>{t.date}</span>
+                <span style={{
+                  fontSize: 10, padding: '2px 8px', borderRadius: 4, fontWeight: 700,
+                  background: attended ? 'rgba(198,241,53,0.1)' : 'rgba(248,113,113,0.1)',
+                  color: attended ? LIME : '#f87171',
+                }}>
+                  {attended ? 'Был' : 'Отсутствовал'}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -488,20 +675,20 @@ function InjuriesTab({ athleteId }: { athleteId: string }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
             <div>
               <label style={{ display: 'block', fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>Название травмы *</label>
-              <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Растяжение связок" style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5', fontSize: 12 }} />
+              <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Растяжение связок" style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', background: '#0f1115', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5', fontSize: 12 }} />
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>Дата получения *</label>
-              <input type="date" value={form.dateInjured} onChange={e => setForm({ ...form, dateInjured: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5', fontSize: 12 }} />
+              <input type="date" value={form.dateInjured} onChange={e => setForm({ ...form, dateInjured: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', background: '#0f1115', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5', fontSize: 12 }} />
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>Дата излечения</label>
-              <input type="date" value={form.dateHealed} onChange={e => setForm({ ...form, dateHealed: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5', fontSize: 12 }} />
+              <input type="date" value={form.dateHealed} onChange={e => setForm({ ...form, dateHealed: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', background: '#0f1115', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5', fontSize: 12 }} />
             </div>
           </div>
           <div style={{ marginBottom: 12 }}>
             <label style={{ display: 'block', fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>Описание / лечение</label>
-            <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Описание травмы, назначенное лечение..." rows={2} style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5', fontSize: 12, resize: 'vertical' }} />
+            <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Описание травмы, назначенное лечение..." rows={2} style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', background: '#0f1115', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5', fontSize: 12, resize: 'vertical' }} />
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
             <button onClick={() => setShowAdd(false)} style={{ padding: '6px 12px', background: 'transparent', border: '1px solid #1e2230', borderRadius: 6, color: '#9ca3af', cursor: 'pointer', fontSize: 12 }}>Отмена</button>

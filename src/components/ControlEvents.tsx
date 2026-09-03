@@ -173,64 +173,60 @@ export default function ControlEvents() {
   const past = events.filter(e => e.date < today).sort((a, b) => b.date.localeCompare(a.date))
 
   const renderCard = (evt: ControlEvent) => (
-    <div
-      key={evt.id}
-      onClick={() => openEdit(evt)}
-      style={{
-        background: '#0f1115',
-        border: '1px solid #1f2937',
-        borderRadius: 14,
-        padding: '16px 18px',
-        marginBottom: 12,
-        cursor: 'pointer',
-        transition: 'border-color 0.15s',
-      }}
-      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#2a3040' }}
-      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#1f2937' }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 4 }}>{evt.name}</div>
-          <div style={{ color: '#9ca3af', fontSize: 13 }}>
-            {evt.date ? new Date(evt.date).toLocaleDateString('ru-RU') : 'Без даты'}
-          </div>
+  <div
+    key={evt.id}
+    onClick={() => setResultsEventId(evt.id)}   // клик по карточке = открыть введённые результаты
+    style={{ background: '#0f1115', border: '1px solid #1f2937', borderRadius: 14,
+      padding: '16px 18px', marginBottom: 12, cursor: 'pointer', transition: 'border-color 0.15s' }}
+    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#2a3040' }}
+    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#1f2937' }}
+  >
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+      <div>
+        <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 4 }}>{evt.name}</div>
+        <div style={{ color: '#9ca3af', fontSize: 13 }}>
+          {evt.date ? new Date(evt.date).toLocaleDateString('ru-RU') : 'Без даты'}
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-  {(() => {
-    const filled = results.filter(r => r.controlEventId === evt.id).length
-    return (
-      <span style={{ fontSize: 11, color: filled > 0 ? LIME : '#6b7280', background: '#1a1d26', padding: '3px 10px', borderRadius: 999 }}>
-        {filled > 0 ? `${filled} результатов` : `${evt.disciplines.length} дисциплин`}
-      </span>
-    )
-  })()}
-  <button
-    onClick={(e) => { e.stopPropagation(); setResultsEventId(evt.id) }}
-    style={{
-      background: 'rgba(198,241,53,0.08)', border: '1px solid rgba(198,241,53,0.2)',
-      color: LIME, borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontWeight: 600,
-    }}
-  >
-    Внести результаты
-  </button>
-  <button
-    onClick={(e) => { e.stopPropagation(); handleDelete(evt.id) }}
-    style={{ background: 'transparent', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: 12, padding: 4 }}
-    title="Удалить"
-  >
-    ✕
-  </button>
-</div>
       </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {evt.disciplines.map(d => (
-          <span key={d} style={{ fontSize: 11, color: '#c6f135', background: '#1a2008', padding: '3px 10px', borderRadius: 6, whiteSpace: 'nowrap' }}>
-            {d}
-          </span>
-        ))}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        {(() => {
+          const filled = results.filter(r => r.controlEventId === evt.id).length
+          return (
+            <span style={{ fontSize: 11, color: filled > 0 ? LIME : '#6b7280', background: '#1a1d26', padding: '3px 10px', borderRadius: 999 }}>
+              {filled > 0 ? `${filled} результатов` : `${evt.disciplines.length} дисциплин`}
+            </span>
+          )
+        })()}
+
+        {/* Отдельная кнопка редактирования — не открывает результаты */}
+        <button
+          onClick={(e) => { e.stopPropagation(); openEdit(evt) }}
+          style={{ background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.2)',
+            color: '#60a5fa', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontWeight: 600,
+            display: 'flex', alignItems: 'center', gap: 4 }}
+          title="Редактировать зачет"
+        >
+          ✎ Редактировать
+        </button>
+
+        <button
+          onClick={(e) => { e.stopPropagation(); handleDelete(evt.id) }}
+          style={{ background: 'transparent', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: 12, padding: 4 }}
+          title="Удалить"
+        >
+          ✕
+        </button>
       </div>
     </div>
-  )
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      {evt.disciplines.map(d => (
+        <span key={d} style={{ fontSize: 11, color: '#c6f135', background: '#1a2008', padding: '3px 10px', borderRadius: 6, whiteSpace: 'nowrap' }}>
+          {d}
+        </span>
+      ))}
+    </div>
+  </div>
+)
 
   return (
     <div style={{ animation: 'fadeIn 0.35s ease forwards' }}>

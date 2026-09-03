@@ -1,4 +1,4 @@
-import { decathlonEvents, heptathlonEvents, calcDecathlonPoints } from '../data/mockData';
+import { decathlonEvents, heptathlonEvents, calcDecathlonPoints, EventCategory } from '../data/mockData';
 import { disciplineMeta } from './controlEventUtils';
 import type { Athlete, Result } from '../contexts/Athletescontext';
 
@@ -38,7 +38,7 @@ export function averageAge(athletes: Athlete[]): number | null {
   return Math.round((ages.reduce((s, a) => s + a, 0) / ages.length) * 10) / 10;
 }
 
-const RU_MONTHS_SHORT = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
+export const RU_MONTHS_SHORT = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
 
 /** Группирует результаты по месяцу (YYYY-MM) и считает количество записей — для графиков активности. */
 export function resultsByMonth(results: Result[]): { month: string; count: number }[] {
@@ -184,4 +184,107 @@ export function decliningAthletes(athletes: Athlete[], results: Result[], limit 
     }
   }
   return entries.slice(0, limit)
+}
+
+/* ========== Персональный профиль спортсмена (радар) ========== */
+
+export const CATEGORY_LABELS: Record<EventCategory, string> = {
+  sprint: 'Спринт',
+  hurdles: 'Барьеры',
+  jumps: 'Прыжки',
+  vault: 'Шест',
+  throws: 'Метания',
+  endurance: 'Выносливость',
+}
+
+// Порядок осей радара — фиксированный, чтобы форма профиля была сопоставима между спортсменами.
+const CATEGORY_ORDER: EventCategory[] = ['sprint', 'hurdles', 'jumps', 'vault', 'throws', 'endurance']
+
+export interface CategoryProfilePoint {
+  category: string
+  points: number
+}
+
+/**
+ * Профиль спортсмена по группам дисциплин многоборья (для радар-диаграммы).
+ * В каждой категории — средние очки (по таблицам World Athletics) среди дисциплин
+ * этой категории, где у спортсмена есть хотя бы один внесённый результат.
+ * У семиборок нет прыжка с шестом — соответствующая ось будет нулевой, это ожидаемо.
+ */
+export function athleteCategoryProfile(athlete: Athlete, allResults: Result[]): CategoryProfilePoint[] {
+  const events = eventsFor(athlete.gender)
+  const athleteResults = allResults.filter(r => r.athleteId === athlete.id)
+
+  const byCategory = new Map<EventCategory, number[]>()
+  for (const ev of events) {
+    const best = bestResultFor(athleteResults, ev.name, ev.type as 'track' | 'field')
+    if (!best) continue
+    const pts = calcDecathlonPoints(ev, best.resultValue)
+    const arr = byCategory.get(ev.category) || []
+    arr.push(pts)
+    byCategory.set(ev.category, arr)
+  }
+
+  return CATEGORY_ORDER.map(cat => {
+    const arr = byCategory.get(cat)
+    const avg = arr && arr.length > 0 ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0
+    return { category: CATEGORY_LABELS[cat], points: avg }
+  })
+}
+
+/* ========== Лидеры по дисциплинам (не только многоборье — все внесённые дисциплины) ========== */
+
+export interface DisciplineLeaderEntry {
+  discipline: string
+  athlete: Athlete
+  result: string
+  unit: string
+  /** Отрыв лидера от второго места, 0-100%. 100, если результат единственный. */
+  marginPercent: number
+}
+
+/** Для каждой дисциплины с внесёнными результатами находит текущего лидера и его отрыв от второго места. */
+export function disciplineLeaders(athletes: Athlete[], results: Result[]): DisciplineLeaderEntry[] {
+  const byDiscipline = new Map<string, Result[]>()
+  for (const r of results) {
+    const arr = byDiscipline.get(r.discipline) || []
+    arr.push(r)
+    byDiscipline.set(r.discipline, arr)
+  }
+
+  const leaders: DisciplineLeaderEntry[] = []
+
+  for (const [discipline, list] of byDiscipline) {
+    const { lowerIsBetter } = disciplineMeta(discipline)
+
+    // Лучший результат каждого спортсмена в этой дисциплине
+    const bestByAthlete = new Map<string, Result>()
+    for (const r of list) {
+      const cur = bestByAthlete.get(r.athleteId)
+      if (!cur) { bestByAthlete.set(r.athleteId, r); continue }
+      const better = lowerIsBetter ? r.resultValue < cur.resultValue : r.resultValue > cur.resultValue
+      if (better) bestByAthlete.set(r.athleteId, r)
+    }
+
+    const ranked = [...bestByAthlete.values()].sort((a, b) =>
+      lowerIsBetter ? a.resultValue - b.resultValue : b.resultValue - a.resultValue
+    )
+    const top = ranked[0]
+    if (!top) continue
+    const athlete = athletes.find(a => a.id === top.athleteId)
+    if (!athlete) continue
+
+    let marginPercent = 100
+    const second = ranked[1]
+    if (second) {
+      const base = Math.max(Math.abs(second.resultValue), 0.0001)
+      const diff = Math.abs(top.resultValue - second.resultValue)
+      // Небольшие отрывы в спорте значимы, поэтому усиливаем масштаб для наглядности полосы.
+      marginPercent = Math.min(100, Math.max(15, Math.round((diff / base) * 500)))
+    }
+
+    leaders.push({ discipline, athlete, result: top.result, unit: top.unit, marginPercent })
+  }
+
+  return leaders.sort((a, b) => a.discipline.localeCompare(b.discipline, 'ru'))
 }
