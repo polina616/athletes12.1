@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import {
-  BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  BarChart, Bar, AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
 import { useAthletes } from '../contexts/Athletescontext'
 import { useAuth } from '../contexts/AuthContext'
@@ -10,6 +10,11 @@ import { IconTrend } from './Icons'
 
 const LIME = '#c6f135'
 const PURPLE = '#a78bfa'
+const ageGroupLabels: Record<string, string> = {
+  junior: 'Младшая',
+  middle: 'Средняя',
+  senior: 'Старшая',
+}
 
 function EmptyBlock({ text }: { text: string }) {
   return (
@@ -42,8 +47,13 @@ const gridProps = {
 }
 
 export default function Analytics() {
-  const { athletes, results, loading } = useAthletes()
+  const { athletes: allAthletes, results: allResults, loading } = useAthletes()
   const { coachProfile } = useAuth()
+  const [ageGroupFilter, setAgeGroupFilter] = useState<'all' | 'junior' | 'middle' | 'senior'>('all')
+
+  const athletes = ageGroupFilter === 'all' ? allAthletes : allAthletes.filter(a => a.ageGroup === ageGroupFilter)
+  const athleteIds = new Set(athletes.map(a => a.id))
+  const results = ageGroupFilter === 'all' ? allResults : allResults.filter(r => athleteIds.has(r.athleteId))
 
   const [controlEventsCount, setControlEventsCount] = useState<number | null>(null)
 
@@ -113,13 +123,31 @@ export default function Analytics() {
 
   return (
     <div style={{ animation: 'fadeIn 0.35s ease forwards' }}>
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 36, fontWeight: 800, color: '#f0f2f5', margin: 0, letterSpacing: '0.01em' }}>
-          АНАЛИТИКА
-        </h1>
-        <p style={{ color: '#6b7280', fontSize: 13, margin: '4px 0 0' }}>
-          {athletes.length > 0 ? `Командная статистика · ${athletes.length} спортсменов` : 'Пока нет спортсменов — статистика появится после добавления первых результатов'}
-        </p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 36, fontWeight: 800, color: '#f0f2f5', margin: 0, letterSpacing: '0.01em' }}>
+            АНАЛИТИКА
+          </h1>
+          <p style={{ color: '#6b7280', fontSize: 13, margin: '4px 0 0' }}>
+            {athletes.length > 0 ? `Командная статистика · ${athletes.length} спортсменов` : 'Нет спортсменов в этой группе'}
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 6, background: 'rgba(15,17,23,0.8)', border: '1px solid #1e2230', borderRadius: 10, padding: 4 }}>
+          {(['all', 'junior', 'middle', 'senior'] as const).map(g => (
+            <button
+              key={g}
+              onClick={() => setAgeGroupFilter(g)}
+              style={{
+                padding: '6px 14px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                fontSize: 12, fontWeight: 600,
+                background: ageGroupFilter === g ? 'rgba(198,241,53,0.12)' : 'transparent',
+                color: ageGroupFilter === g ? LIME : '#9ca3af',
+              }}
+            >
+              {g === 'all' ? 'Все' : ageGroupLabels[g]}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Top KPI */}
@@ -142,24 +170,40 @@ export default function Analytics() {
         ))}
       </div>
 
-      {/* Activity by month */}
+           {/* Activity by month */}
       <div style={{ background: 'rgba(15,17,23,0.8)', border: '1px solid #1e2230', borderRadius: 12, padding: '20px', backdropFilter: 'blur(12px)', marginBottom: 16 }}>
         <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, fontWeight: 700, color: '#f0f2f5', letterSpacing: '0.04em', marginBottom: 16 }}>АКТИВНОСТЬ ПО МЕСЯЦАМ</div>
         {activity.length > 0 ? (
           <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={activity} barCategoryGap="35%">
+            <LineChart data={activity} margin={{ top: 8, right: 24, left: 0, bottom: 0 }}>
               <defs>
-                <linearGradient id="activityGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={LIME} stopOpacity={0.9} />
-                  <stop offset="100%" stopColor={LIME} stopOpacity={0.35} />
-                </linearGradient>
+                <marker
+                  id="activityArrow"
+                  markerWidth={10}
+                  markerHeight={10}
+                  refX={7}
+                  refY={3.5}
+                  orient="auto"
+                  markerUnits="userSpaceOnUse"
+                >
+                  <polygon points="0 0, 8 3.5, 0 7" fill={LIME} />
+                </marker>
               </defs>
               <CartesianGrid {...gridProps} />
               <XAxis dataKey="month" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis allowDecimals={false} tick={{ fill: '#6b7280', fontSize: 10, fontFamily: "'JetBrains Mono'" }} axisLine={false} tickLine={false} width={30} />
-              <Tooltip cursor={{ fill: 'rgba(198,241,53,0.04)' }} contentStyle={tooltipStyle} />
-              <Bar dataKey="count" name="Результатов" fill="url(#activityGradient)" maxBarSize={56} radius={[6, 6, 0, 0]} />
-            </BarChart>
+              <Tooltip cursor={{ stroke: 'rgba(198,241,53,0.15)', strokeWidth: 1 }} contentStyle={tooltipStyle} />
+              <Line
+                type="monotone"
+                dataKey="count"
+                name="Результатов"
+                stroke={LIME}
+                strokeWidth={2.5}
+                markerEnd="url(#activityArrow)"
+                dot={{ fill: '#080a0f', stroke: LIME, strokeWidth: 2, r: 4 }}
+                activeDot={{ r: 6, fill: LIME, stroke: '#080a0f', strokeWidth: 2 }}
+              />
+            </LineChart>
           </ResponsiveContainer>
         ) : (
           <EmptyBlock text="Пока нет внесённых результатов" />

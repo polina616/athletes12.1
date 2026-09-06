@@ -7,6 +7,11 @@ import { athleteTotalPoints, averageAge, teamPointsTrend, teamPointsDelta, progr
 import { useState, useEffect } from "react"
 
 const LIME = "#c6f135"
+const ageGroupLabels: Record<string, string> = {
+  junior: 'Младшая',
+  middle: 'Средняя',
+  senior: 'Старшая',
+}
 
 function EmptyRow({ text }: { text: string }) {
   return (
@@ -31,9 +36,15 @@ interface UpcomingEvent {
 }
 
 export default function Dashboard() {
-  const { athletes, results, injuries, loading } = useAthletes()
+  const { athletes: allAthletes, results: allResults, injuries: allInjuries, loading } = useAthletes()
   const { coachProfile } = useAuth()
   const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>([])
+  const [ageGroupFilter, setAgeGroupFilter] = useState<'all' | 'junior' | 'middle' | 'senior'>('all')
+
+  const athletes = ageGroupFilter === 'all' ? allAthletes : allAthletes.filter(a => a.ageGroup === ageGroupFilter)
+  const athleteIds = new Set(athletes.map(a => a.id))
+  const results = ageGroupFilter === 'all' ? allResults : allResults.filter(r => athleteIds.has(r.athleteId))
+  const injuries = ageGroupFilter === 'all' ? allInjuries : allInjuries.filter(i => athleteIds.has(i.athleteId))
 
   useEffect(() => {
     if (!coachProfile) return
@@ -247,11 +258,27 @@ export default function Dashboard() {
           >
             ПАНЕЛЬ УПРАВЛЕНИЯ
           </h1>
-          <p style={{ color: "#4b5563", fontSize: 13, margin: "8px 0 0" }}>
+                    <p style={{ color: "#4b5563", fontSize: 13, margin: "8px 0 0" }}>
             {athletes.length > 0
               ? `${athletes.length} спортсменов · ${results.length} результатов внесено`
               : "Пока нет спортсменов — добавьте первого в разделе «Спортсмены»"}
           </p>
+          <div style={{ display: "flex", gap: 6, marginTop: 16, background: "rgba(8,10,15,0.5)", border: "1px solid #1e2230", borderRadius: 10, padding: 4, width: "fit-content" }}>
+            {(["all", "junior", "middle", "senior"] as const).map(g => (
+              <button
+                key={g}
+                onClick={() => setAgeGroupFilter(g)}
+                style={{
+                  padding: "6px 14px", borderRadius: 7, border: "none", cursor: "pointer",
+                  fontSize: 12, fontWeight: 600,
+                  background: ageGroupFilter === g ? "rgba(198,241,53,0.14)" : "transparent",
+                  color: ageGroupFilter === g ? LIME : "#9ca3af",
+                }}
+              >
+                {g === "all" ? "Все" : ageGroupLabels[g]}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

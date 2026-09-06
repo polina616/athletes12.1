@@ -10,9 +10,16 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
 } from 'recharts';
-import { IconArrowLeft, IconUser } from './Icons';
+import { IconArrowLeft, IconUser, IconChevron } from './Icons';
+import DateInput from './DateInput'
+import { resizeImageFile } from '../lib/imageUtils';
 
 const LIME = '#c6f135';
+const ageGroupLabels: Record<string, string> = {
+  junior: 'Младшая',
+  middle: 'Средняя',
+  senior: 'Старшая',
+};
 
 export default function AthleteProfile() {
   const { id } = useParams<{ id: string }>();
@@ -58,6 +65,7 @@ export default function AthleteProfile() {
           </div>
           <div style={{ fontSize: 12, color: '#6b7280', textAlign: 'center', marginBottom: 16 }}>
             {athlete.specialization === 'decathlon' ? 'Десятиборье' : athlete.specialization === 'heptathlon' ? 'Семиборье' : athlete.specialization} · {athlete.gender === 'M' ? 'М' : 'Ж'}
+            {athlete.ageGroup && ` · ${ageGroupLabels[athlete.ageGroup]} группа`}
           </div>
 
                     <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 16 }}>
@@ -93,14 +101,12 @@ export default function AthleteProfile() {
           <InfoRow label="Телефон" value={athlete.phone} />
           <InfoRow label="Родители" value={athlete.parents} />
           <InfoRow label="Тел. родителей" value={athlete.parentPhone} />
-          <InfoRow label="Группа" value={athlete.group} />
           <InfoRow label="С нами" value={athlete.trainingStart} />
 
           <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #1e2230' }}>
             <div style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Антропометрия</div>
             <InfoRow label="Рост" value={athlete.height ? `${athlete.height} см` : ''} />
             <InfoRow label="Вес" value={athlete.weight ? `${athlete.weight} кг` : ''} />
-            <InfoRow label="Размах рук" value={athlete.armSpan ? `${athlete.armSpan} см` : ''} />
             <InfoRow label="Длина ноги" value={athlete.legLength ? `${athlete.legLength} см` : ''} />
             <InfoRow label="Размер обуви" value={athlete.shoeSize ? String(athlete.shoeSize) : ''} />
           </div>
@@ -169,9 +175,9 @@ function EditModal({ athlete, onClose, onSave }: { athlete: any; onClose: () => 
     birthDate: athlete.birthDate,
     gender: athlete.gender,
     grade: athlete.grade,
-    group: athlete.group,
     specialization: athlete.specialization,
     phone: athlete.phone,
+    ageGroup: athlete.ageGroup || 'middle',
     parents: athlete.parents,
     parentPhone: athlete.parentPhone,
     height: athlete.height ?? '',
@@ -184,13 +190,15 @@ function EditModal({ athlete, onClose, onSave }: { athlete: any; onClose: () => 
     photoFile: null as File | null,
   });
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
-    setForm({ ...form, photoFile: file });
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setPhotoPreview(reader.result as string);
-      reader.readAsDataURL(file);
+    if (!file) return;
+    try {
+      const resized = await resizeImageFile(file);
+      setPhotoPreview(resized);
+      setForm({ ...form, photoFile: file, photoDataUrl: resized } as any);
+    } catch {
+      alert('Не удалось обработать фото');
     }
   };
 
@@ -202,8 +210,8 @@ function EditModal({ athlete, onClose, onSave }: { athlete: any; onClose: () => 
       birthDate: form.birthDate || undefined,
       gender: form.gender,
       grade: form.grade || undefined,
-      group: form.group || undefined,
       specialization: form.specialization,
+      ageGroup: form.ageGroup,
       phone: form.phone || undefined,
       parents: form.parents || undefined,
       parentPhone: form.parentPhone || undefined,
@@ -268,7 +276,7 @@ function EditModal({ athlete, onClose, onSave }: { athlete: any; onClose: () => 
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
           <div>
             <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>Пол</label>
             <select value={form.gender} onChange={e => setForm({ ...form, gender: e.target.value as 'M' | 'F' })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }}>
@@ -278,7 +286,13 @@ function EditModal({ athlete, onClose, onSave }: { athlete: any; onClose: () => 
           </div>
           <div>
             <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>Дата рождения</label>
-            <input type="date" value={form.birthDate} onChange={e => setForm({ ...form, birthDate: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }} />
+            <DateInput value={form.birthDate} onChange={v => setForm({ ...form, birthDate: v })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>Возрастная группа</label>
+            <select value={form.ageGroup} onChange={e => setForm({ ...form, ageGroup: e.target.value as any })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }}>
+              {Object.entries(ageGroupLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
           </div>
           <div>
             <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>Статус</label>
@@ -287,17 +301,6 @@ function EditModal({ athlete, onClose, onSave }: { athlete: any; onClose: () => 
               <option value="injured">Травма</option>
               <option value="inactive">Неактивен</option>
             </select>
-          </div>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-          <div>
-            <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>Разряд</label>
-            <input value={form.grade} onChange={e => setForm({ ...form, grade: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }} />
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>Группа</label>
-            <input value={form.group} onChange={e => setForm({ ...form, group: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }} />
           </div>
         </div>
 
@@ -327,7 +330,6 @@ function EditModal({ athlete, onClose, onSave }: { athlete: any; onClose: () => 
             {[
               { label: 'Рост, см', key: 'height' as const },
               { label: 'Вес, кг', key: 'weight' as const },
-              { label: 'Размах, см', key: 'armSpan' as const },
               { label: 'Нога, см', key: 'legLength' as const },
               { label: 'Обувь', key: 'shoeSize' as const },
             ].map(field => (
@@ -346,7 +348,7 @@ function EditModal({ athlete, onClose, onSave }: { athlete: any; onClose: () => 
 
         <div style={{ marginBottom: 20 }}>
           <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>С нами с</label>
-          <input type="date" value={form.trainingStart} onChange={e => setForm({ ...form, trainingStart: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }} />
+          <DateInput value={form.trainingStart} onChange={v => setForm({ ...form, trainingStart: v })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }} />
         </div>
 
         <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
@@ -380,37 +382,92 @@ function ResultsTab({ results }: { results: any[] }) {
     ...[...grouped.keys()].filter(c => !DISCIPLINE_CATEGORY_ORDER.includes(c)),
   ];
 
+  // По умолчанию свёрнуты все категории, кроме первой — так сразу видно последние результаты,
+  // а остальное открывается по необходимости.
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    orderedCats.forEach((cat, i) => { initial[cat] = i !== 0; });
+    return initial;
+  });
+
+  const toggleCat = (cat: string) => {
+    setCollapsed(prev => ({ ...prev, [cat]: !prev[cat] }));
+  };
+
+  const allCollapsed = orderedCats.every(cat => collapsed[cat]);
+  const setAll = (value: boolean) => {
+    const next: Record<string, boolean> = {};
+    orderedCats.forEach(cat => { next[cat] = value; });
+    setCollapsed(next);
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {orderedCats.map(cat => {
-        const items = [...grouped.get(cat)!].sort((a, b) => b.date.localeCompare(a.date));
-        return (
-          <div key={cat}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 14, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                {cat}
-              </span>
-              <span style={{ fontSize: 11, color: '#4b5563' }}>{items.length}</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {items.map(r => (
-                <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: 'rgba(20,23,32,0.5)', borderRadius: 8 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f2f5' }}>{r.discipline}</div>
-                    <div style={{ fontSize: 11, color: '#6b7280' }}>{r.date} · {r.location}</div>
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+        <button
+          onClick={() => setAll(!allCollapsed)}
+          style={{ background: 'transparent', border: 'none', color: '#6b7280', fontSize: 11, cursor: 'pointer', textDecoration: 'underline' }}
+        >
+          {allCollapsed ? 'Развернуть всё' : 'Свернуть всё'}
+        </button>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {orderedCats.map(cat => {
+          const items = [...grouped.get(cat)!].sort((a, b) => b.date.localeCompare(a.date));
+          const isCollapsed = collapsed[cat];
+          const latest = items[0];
+          return (
+            <div key={cat} style={{ background: 'rgba(20,23,32,0.35)', borderRadius: 8, border: '1px solid #1e2230', overflow: 'hidden' }}>
+              <div
+                onClick={() => toggleCat(cat)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 12px', cursor: 'pointer', userSelect: 'none',
+                }}
+              >
+                <span style={{
+                  display: 'inline-flex', color: '#6b7280', flexShrink: 0,
+                  transform: isCollapsed ? 'none' : 'rotate(90deg)', transition: 'transform 0.15s',
+                }}>
+                  <IconChevron dir="right" />
+                </span>
+                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 14, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  {cat}
+                </span>
+                <span style={{ fontSize: 11, color: '#4b5563' }}>{items.length}</span>
+
+                {isCollapsed && latest && (
+                  <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 11, color: '#6b7280' }}>{latest.discipline}</span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: LIME }}>
+                      {latest.result} <span style={{ fontSize: 10, color: '#6b7280' }}>{latest.unit}</span>
+                    </span>
                   </div>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 700, color: LIME }}>
-                    {r.result} <span style={{ fontSize: 11, color: '#6b7280' }}>{r.unit}</span>
-                  </div>
-                  <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 3, background: 'rgba(96,165,250,0.1)', color: '#60a5fa', textTransform: 'uppercase', fontWeight: 600 }}>
-                    Тест
-                  </span>
+                )}
+              </div>
+
+              {!isCollapsed && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 12px 12px' }}>
+                  {items.map(r => (
+                    <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: 'rgba(20,23,32,0.5)', borderRadius: 8 }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f2f5' }}>{r.discipline}</div>
+                        <div style={{ fontSize: 11, color: '#6b7280' }}>{r.date} · {r.location}</div>
+                      </div>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 700, color: LIME }}>
+                        {r.result} <span style={{ fontSize: 11, color: '#6b7280' }}>{r.unit}</span>
+                      </div>
+                      <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 3, background: 'rgba(96,165,250,0.1)', color: '#60a5fa', textTransform: 'uppercase', fontWeight: 600 }}>
+                        Тест
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -679,11 +736,11 @@ function InjuriesTab({ athleteId }: { athleteId: string }) {
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>Дата получения *</label>
-              <input type="date" value={form.dateInjured} onChange={e => setForm({ ...form, dateInjured: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', background: '#0f1115', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5', fontSize: 12 }} />
+              <DateInput value={form.dateInjured} onChange={v => setForm({ ...form, dateInjured: v })} style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', background: '#0f1115', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5', fontSize: 12 }} />
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>Дата излечения</label>
-              <input type="date" value={form.dateHealed} onChange={e => setForm({ ...form, dateHealed: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', background: '#0f1115', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5', fontSize: 12 }} />
+              <DateInput value={form.dateHealed} onChange={v => setForm({ ...form, dateHealed: v })} style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', background: '#0f1115', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5', fontSize: 12 }} />
             </div>
           </div>
           <div style={{ marginBottom: 12 }}>

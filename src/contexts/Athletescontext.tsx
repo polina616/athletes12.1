@@ -28,6 +28,7 @@ export interface Athlete {
   status: 'active' | 'injured' | 'inactive';
   photo: string;
   specialization: 'decathlon' | 'heptathlon' | 'sprints' | 'jumps' | 'throws' | 'distance';
+  ageGroup: 'junior' | 'middle' | 'senior' | null;
    createdAt: string; 
 }
 
@@ -79,6 +80,7 @@ export interface NewAthleteInput {
   grade?: string;
   group?: string;
   specialization: Athlete['specialization'];
+  ageGroup?: 'junior' | 'middle' | 'senior';
   phone?: string;
   parents?: string;
   parentPhone?: string;
@@ -179,6 +181,7 @@ function rowToAthlete(row: any): Athlete {
     status: row.status || 'active',
     photo: row.photo_url || '',
     specialization: row.specialization || 'decathlon',
+    ageGroup: row.age_group || null,
     createdAt: row.created_at || '', 
   };
 }
@@ -208,7 +211,7 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [injuries, setInjuries] = useState<Injury[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const refresh = useCallback(async () => {
+    const refresh = useCallback(async (opts: { silent?: boolean } = {}) => {
     if (!coachProfile) {
       setAthletes([]);
       setResults([]);
@@ -216,7 +219,7 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!opts.silent) setLoading(true);
 
     const { data: athleteRows, error: athleteError } = await supabase
       .from('athletes')
@@ -244,30 +247,32 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return;
     }
 
-    const { data: resultRows, error: resultError } = await supabase
-      .from('results')
-      .select('*, disciplines(name, unit)')
-      .in('athlete_id', athleteIds)
-      .order('date', { ascending: true });
+    // Результаты и травмы теперь запрашиваются параллельно, а не по очереди.
+    const [resultsRes, injuriesRes] = await Promise.all([
+      supabase
+        .from('results')
+        .select('*, disciplines(name, unit)')
+        .in('athlete_id', athleteIds)
+        .order('date', { ascending: true }),
+      supabase
+        .from('injuries')
+        .select('*')
+        .in('athlete_id', athleteIds)
+        .order('date_injured', { ascending: false }),
+    ]);
 
-    if (resultError) {
-      console.error('Ошибка загрузки результатов:', getFriendlySupabaseError(resultError));
+    if (resultsRes.error) {
+      console.error('Ошибка загрузки результатов:', getFriendlySupabaseError(resultsRes.error));
       setResults([]);
     } else {
-      setResults((resultRows || []).map(rowToResult));
+      setResults((resultsRes.data || []).map(rowToResult));
     }
 
-    const { data: injuryRows, error: injuryError } = await supabase
-      .from('injuries')
-      .select('*')
-      .in('athlete_id', athleteIds)
-      .order('date_injured', { ascending: false });
-
-    if (injuryError) {
-      console.error('Ошибка загрузки травм:', getFriendlySupabaseError(injuryError));
+    if (injuriesRes.error) {
+      console.error('Ошибка загрузки травм:', getFriendlySupabaseError(injuriesRes.error));
       setInjuries([]);
     } else {
-      setInjuries((injuryRows || []).map((row: any) => ({
+      setInjuries((injuriesRes.data || []).map((row: any) => ({
         id: row.id,
         athleteId: row.athlete_id,
         name: row.name,
@@ -300,8 +305,10 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return { error: 'Спортсмен с таким именем уже существует' };
     }
 
-    let photoUrl = '';
-    if (input.photoFile) {
+        let photoUrl = '';
+    if ((input as any).photoDataUrl) {
+      photoUrl = (input as any).photoDataUrl;
+    } else if (input.photoFile) {
       photoUrl = await new Promise<string>((resolve) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result as string);
@@ -318,6 +325,7 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       grade: input.grade || null,
       training_group: input.group || null,
       specialization: input.specialization,
+      age_group: input.ageGroup || null,
       status: 'active',
       phone: input.phone || null,
       parents: input.parents || null,
@@ -334,15 +342,17 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.error('Ошибка добавления спортсмена:', error);
       return { error: getFriendlySupabaseError(error) };
     }
-    await refresh();
+        await refresh({ silent: true });
     return { error: null };
   };
 
   const updateAthlete = async (id: string, input: Partial<NewAthleteInput>) => {
     if (!coachProfile?.id) return { error: 'Нет профиля тренера' };
 
-    let photoUrl: string | undefined = undefined;
-    if (input.photoFile) {
+        let photoUrl = '';
+    if ((input as any).photoDataUrl) {
+      photoUrl = (input as any).photoDataUrl;
+    } else if (input.photoFile) {
       photoUrl = await new Promise<string>((resolve) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result as string);
@@ -358,6 +368,7 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (input.grade !== undefined) updateData.grade = input.grade || null;
     if (input.group !== undefined) updateData.training_group = input.group || null;
     if (input.specialization !== undefined) updateData.specialization = input.specialization;
+    if (input.ageGroup !== undefined) updateData.age_group = input.ageGroup || null;
     if (input.phone !== undefined) updateData.phone = input.phone || null;
     if (input.parents !== undefined) updateData.parents = input.parents || null;
     if (input.parentPhone !== undefined) updateData.parent_phone = input.parentPhone || null;
@@ -379,7 +390,7 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.error('Ошибка обновления спортсмена:', error);
       return { error: getFriendlySupabaseError(error) };
     }
-    await refresh();
+        await refresh({ silent: true });
     return { error: null };
   };
 
@@ -407,7 +418,7 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       .eq('coach_id', coachProfile.id);
     if (error) return { error: getFriendlySupabaseError(error) };
 
-    await refresh();
+        await refresh({ silent: true });
     return { error: null };
   };
 
@@ -439,7 +450,7 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!data.dateHealed) {
       await syncAthleteStatus(athleteId);
     }
-    await refresh();
+        await refresh({ silent: true });
     return { error: null };
   };
 
@@ -460,7 +471,7 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (athleteId) {
       await syncAthleteStatus(athleteId);
     }
-    await refresh();
+        await refresh({ silent: true });
     return { error: null };
   };
 
@@ -474,7 +485,7 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (athleteId) {
       await syncAthleteStatus(athleteId);
     }
-    await refresh();
+        await refresh({ silent: true });
     return { error: null };
   };
  const addResult = async (input: NewResultInput) => {

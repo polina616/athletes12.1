@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabaseClient'
 import Modal from './Modal';
 import { useAthletes } from '../contexts/Athletescontext'
 import ControlEventResults from './ControlEventResults'
+import DateInput from './DateInput'
 
 const LIME = '#c6f135'
 
@@ -318,21 +319,7 @@ export default function ControlEvents() {
 
               <div>
                 <label style={{ display: 'block', fontSize: 13, color: '#9ca3af', marginBottom: 6 }}>Дата проведения</label>
-                <input
-                  type="date"
-                  value={form.date}
-                  onChange={e => setForm({ ...form, date: e.target.value })}
-                  style={{
-                    width: '100%',
-                    background: '#0f1115',
-                    border: '1px solid #374151',
-                    borderRadius: 10,
-                    padding: '10px 12px',
-                    color: '#fff',
-                    fontSize: 14,
-                    outline: 'none',
-                  }}
-                />
+                <DateInput value={form.date} onChange={v => setForm({ ...form, date: v })} style={{ width: '100%', background: '#0f1115', border: '1px solid #374151', borderRadius: 10, padding: '10px 12px', color: '#fff', fontSize: 14 }} />
               </div>
 
               <div>

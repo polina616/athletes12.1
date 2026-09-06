@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { IconPlus, IconSearch, IconTrash, IconUser } from './Icons';
 import { useAthletes, NewAthleteInput } from '../contexts/Athletescontext';
 import { useNavigate } from 'react-router-dom';
+import DateInput from './DateInput'
+import { resizeImageFile } from '../lib/imageUtils';
 
 const LIME = '#c6f135';
 const specLabels: Record<string, string> = {
@@ -12,12 +14,18 @@ const specLabels: Record<string, string> = {
   throws: 'Метания',
   distance: 'Бег на средние/длинные',
 };
+const ageGroupLabels: Record<string, string> = {
+  junior: 'Младшая',
+  middle: 'Средняя',
+  senior: 'Старшая',
+};
 
 export default function Athletes() {
   const { athletes, injuries, loading, addAthlete, deleteAthlete } = useAthletes();
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [filterSpec, setFilterSpec] = useState<string>('all');
+  const [filterAgeGroup, setFilterAgeGroup] = useState<string>('all');
   const [showModal, setShowModal] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -29,6 +37,7 @@ export default function Athletes() {
     grade: '',
     group: '',
     specialization: 'decathlon',
+    ageGroup: 'middle',
     phone: '',
     parents: '',
     parentPhone: '',
@@ -43,22 +52,29 @@ export default function Athletes() {
 
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
-  const filtered = athletes.filter(a => {
+    const filtered = athletes.filter(a => {
     const matchesSearch = a.name.toLowerCase().includes(search.toLowerCase()) ||
       a.nameShort.toLowerCase().includes(search.toLowerCase());
     const matchesSpec = filterSpec === 'all' || a.specialization === filterSpec;
-    return matchesSearch && matchesSpec;
+    const matchesAgeGroup = filterAgeGroup === 'all' || a.ageGroup === filterAgeGroup;
+    return matchesSearch && matchesSpec && matchesAgeGroup;
   });
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
-    setForm({ ...form, photoFile: file });
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setPhotoPreview(reader.result as string);
-      reader.readAsDataURL(file);
-    } else {
+    if (!file) {
+      setForm({ ...form, photoFile: null });
       setPhotoPreview(null);
+      return;
+    }
+    try {
+      const resized = await resizeImageFile(file);
+      // Кладём уже сжатый base64 сразу в превью; photoFile больше не нужен —
+      // передадим готовую строку через addAthlete напрямую (см. ниже правку контекста).
+      setPhotoPreview(resized);
+      setForm({ ...form, photoFile: file, photoDataUrl: resized } as any);
+    } catch {
+      alert('Не удалось обработать фото');
     }
   };
 
@@ -72,6 +88,7 @@ export default function Athletes() {
       grade: form.grade || undefined,
       group: form.group || undefined,
       specialization: form.specialization,
+      ageGroup: form.ageGroup,
       phone: form.phone || undefined,
       parents: form.parents || undefined,
       parentPhone: form.parentPhone || undefined,
@@ -90,7 +107,7 @@ export default function Athletes() {
       setShowModal(false);
       setForm({
         name: '', nameShort: '', birthDate: '', gender: 'M', grade: '', group: '',
-        specialization: 'decathlon', phone: '', parents: '', parentPhone: '',
+        specialization: 'decathlon', ageGroup: 'middle', phone: '', parents: '', parentPhone: '',
         height: undefined, weight: undefined, armSpan: undefined,
         legLength: undefined, shoeSize: undefined, trainingStart: '', photoFile: null,
       });
@@ -140,6 +157,16 @@ export default function Athletes() {
             <option key={k} value={k}>{v}</option>
           ))}
         </select>
+        <select
+          value={filterAgeGroup}
+          onChange={e => setFilterAgeGroup(e.target.value)}
+          style={{ padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 8, color: '#f0f2f5' }}
+        >
+          <option value="all">Все возрастные группы</option>
+          {Object.entries(ageGroupLabels).map(([k, v]) => (
+            <option key={k} value={k}>{v}</option>
+          ))}
+        </select>
       </div>
 
       {loading ? (
@@ -186,11 +213,12 @@ export default function Athletes() {
                     {a.grade}
                   </span>
                 )}
-                {a.group && (
-                  <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 4, background: 'rgba(96,165,250,0.1)', color: '#60a5fa', fontWeight: 600 }}>
-                    {a.group}
+                                {a.ageGroup && (
+                  <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 4, background: 'rgba(167,139,250,0.1)', color: '#a78bfa', fontWeight: 600 }}>
+                    {ageGroupLabels[a.ageGroup]}
                   </span>
                 )}
+                
                 {(() => {
                   const hasInjury = injuries.some(i => i.athleteId === a.id && i.status === 'active');
                   const displayStatus = a.status === 'injured' || hasInjury ? 'injured' : a.status;
@@ -268,7 +296,7 @@ export default function Athletes() {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>Пол</label>
                 <select value={form.gender} onChange={e => setForm({ ...form, gender: e.target.value as 'M' | 'F' })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }}>
@@ -278,12 +306,18 @@ export default function Athletes() {
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>Дата рождения</label>
-                <input type="date" value={form.birthDate} onChange={e => setForm({ ...form, birthDate: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }} />
+                <DateInput value={form.birthDate} onChange={v => setForm({ ...form, birthDate: v })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>Специализация</label>
                 <select value={form.specialization} onChange={e => setForm({ ...form, specialization: e.target.value as any })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }}>
                   {Object.entries(specLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>Возрастная группа *</label>
+                <select value={form.ageGroup} onChange={e => setForm({ ...form, ageGroup: e.target.value as any })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }}>
+                  {Object.entries(ageGroupLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
               </div>
             </div>
@@ -345,7 +379,7 @@ export default function Athletes() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>С нами с</label>
-                <input type="date" value={form.trainingStart} onChange={e => setForm({ ...form, trainingStart: e.target.value })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }} />
+                <DateInput value={form.trainingStart} onChange={v => setForm({ ...form, trainingStart: v })} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1117', border: '1px solid #1e2230', borderRadius: 6, color: '#f0f2f5' }} />
               </div>
             </div>
 
