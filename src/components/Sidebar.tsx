@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { IconDash, IconAthletes, IconCalendar, IconTrophy, IconChart, IconSettings, IconLogout } from './Icons'
+import { IconDash, IconAthletes, IconCalendar, IconTrophy, IconChart, IconSettings, IconLogout, IconList } from './Icons'
 import athleteImg from '@/imports/images-removebg-preview.png'
 
 const navItems = [
@@ -8,6 +8,7 @@ const navItems = [
   { path: '/training', label: 'Тренировки', Icon: IconCalendar },
   { path: '/control-events', label: 'Контрольные зачеты', Icon: IconTrophy },
   { path: '/analytics', label: 'Аналитика', Icon: IconChart },
+  { path: '/disciplines', label: 'Дисциплины', Icon: IconList },
   { path: '/settings', label: 'Настройки', Icon: IconSettings },
 ]
 
@@ -18,7 +19,7 @@ interface SidebarProps {
   notifications?: number;
 }
 
-export default function Sidebar({ userName, role, onLogout, notifications = 3 }: SidebarProps) {
+export default function Sidebar({ userName, role, onLogout, notifications = 0 }: SidebarProps) {
   const location = useLocation();
 
   return (
