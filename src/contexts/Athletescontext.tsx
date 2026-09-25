@@ -71,7 +71,6 @@ export interface Injury {
   description: string;
   status: 'active' | 'healed';
 }
-
 export interface NewAthleteInput {
   name: string;
   nameShort?: string;
@@ -91,6 +90,7 @@ export interface NewAthleteInput {
   shoeSize?: number;
   trainingStart?: string;
   photoFile?: File | null;
+  photoDataUrl?: string; // добавлено — уже сжатое превью из resizeImageFile
 }
 
 interface AthletesContextType {
@@ -290,7 +290,7 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     refresh();
   }, [refresh]);
 
-  const addAthlete = async (input: NewAthleteInput) => {
+    const addAthlete = async (input: NewAthleteInput) => {
     if (!coachProfile?.id) return { error: 'Нет профиля тренера. Перезайдите в аккаунт.' };
     if (!input.name.trim()) return { error: 'Укажите имя спортсмена' };
 
@@ -305,9 +305,9 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return { error: 'Спортсмен с таким именем уже существует' };
     }
 
-        let photoUrl = '';
-    if ((input as any).photoDataUrl) {
-      photoUrl = (input as any).photoDataUrl;
+    let photoUrl: string | undefined;
+    if (input.photoDataUrl) {
+      photoUrl = input.photoDataUrl;
     } else if (input.photoFile) {
       photoUrl = await new Promise<string>((resolve) => {
         const reader = new FileReader();
@@ -342,16 +342,16 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.error('Ошибка добавления спортсмена:', error);
       return { error: getFriendlySupabaseError(error) };
     }
-        await refresh({ silent: true });
+    await refresh({ silent: true });
     return { error: null };
   };
 
-  const updateAthlete = async (id: string, input: Partial<NewAthleteInput>) => {
+    const updateAthlete = async (id: string, input: Partial<NewAthleteInput>) => {
     if (!coachProfile?.id) return { error: 'Нет профиля тренера' };
 
-        let photoUrl = '';
-    if ((input as any).photoDataUrl) {
-      photoUrl = (input as any).photoDataUrl;
+    let photoUrl: string | undefined;
+    if (input.photoDataUrl) {
+      photoUrl = input.photoDataUrl;
     } else if (input.photoFile) {
       photoUrl = await new Promise<string>((resolve) => {
         const reader = new FileReader();
@@ -378,7 +378,8 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (input.legLength !== undefined) updateData.leg_length = input.legLength || null;
     if (input.shoeSize !== undefined) updateData.shoe_size = input.shoeSize || null;
     if (input.trainingStart !== undefined) updateData.training_start = input.trainingStart || null;
-    if (photoUrl !== undefined) updateData.photo_url = photoUrl || null;
+    // теперь пишем photo_url, только если фото реально поменяли
+    if (photoUrl !== undefined) updateData.photo_url = photoUrl;
 
     const { error } = await supabase
       .from('athletes')
@@ -390,15 +391,13 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.error('Ошибка обновления спортсмена:', error);
       return { error: getFriendlySupabaseError(error) };
     }
-        await refresh({ silent: true });
+    await refresh({ silent: true });
     return { error: null };
   };
 
-  const deleteAthlete = async (id: string) => {
+    const deleteAthlete = async (id: string) => {
     if (!coachProfile?.id) return { error: 'Нет профиля тренера' };
 
-    // Порядок важен: сначала дочерние записи (результаты, травмы),
-    // потом сам спортсмен — иначе упадём на FK-ограничении.
     const { error: resultsError } = await supabase
       .from('results')
       .delete()
@@ -411,6 +410,23 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       .eq('athlete_id', id);
     if (injuriesError) return { error: getFriendlySupabaseError(injuriesError) };
 
+    // убираем спортсмена из журнала тренировок, иначе он останется висеть
+    // в athlete_ids/attended_ids и будет искажать посещаемость
+    const { data: relatedTrainings } = await supabase
+      .from('trainings')
+      .select('id, athlete_ids, attended_ids')
+      .eq('coach_id', coachProfile.id)
+      .contains('athlete_ids', [id]);
+
+    if (relatedTrainings && relatedTrainings.length > 0) {
+      await Promise.all(relatedTrainings.map(t =>
+        supabase.from('trainings').update({
+          athlete_ids: (t.athlete_ids || []).filter((x: string) => x !== id),
+          attended_ids: (t.attended_ids || []).filter((x: string) => x !== id),
+        }).eq('id', t.id)
+      ));
+    }
+
     const { error } = await supabase
       .from('athletes')
       .delete()
@@ -418,7 +434,7 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       .eq('coach_id', coachProfile.id);
     if (error) return { error: getFriendlySupabaseError(error) };
 
-        await refresh({ silent: true });
+    await refresh({ silent: true });
     return { error: null };
   };
 
