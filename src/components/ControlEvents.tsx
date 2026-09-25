@@ -52,7 +52,7 @@ export default function ControlEvents() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const { results } = useAthletes()
+  const { athletes, results, refresh: refreshAthletesData } = useAthletes()
   const [resultsEventId, setResultsEventId] = useState<string | null>(null)
 
   const [form, setForm] = useState({
@@ -104,48 +104,110 @@ export default function ControlEvents() {
     setShowModal(true)
   }
 
-  const handleSave = async () => {
-    if (!coachProfile) return
-    if (!form.name.trim()) { alert('Укажите название'); return }
+  // Находит запись в журнале тренировок, автоматически созданную для зачёта.
+// Отдельной колонки-связи нет, поэтому матчим по типу + названию зачёта.
+const findLinkedTraining = async (evt: { name: string }) => {
+  if (!coachProfile) return undefined
+  const { data } = await supabase
+    .from('trainings')
+    .select('id')
+    .eq('coach_id', coachProfile.id)
+    .eq('type', 'Контрольный зачет')
+    .eq('goal', evt.name)
+    .maybeSingle()
+  return data?.id as string | undefined
+}
 
-    if (editingId) {
-      const { error } = await supabase
-        .from('control_events')
-        .update({
-          name: form.name.trim(),
-          date: form.date || null,
-          disciplines: form.disciplines,
-        })
-        .eq('id', editingId)
-        .eq('coach_id', coachProfile.id)
-      if (error) { alert('Ошибка сохранения: ' + error.message); return }
-    } else {
-      const { error } = await supabase.from('control_events').insert({
-        coach_id: coachProfile.id,
+const handleSave = async () => {
+  if (!coachProfile) return
+  if (!form.name.trim()) { alert('Укажите название'); return }
+
+  const eventDate = form.date || new Date().toISOString().slice(0, 10)
+
+  if (editingId) {
+    const prevEvent = events.find(e => e.id === editingId)
+
+    const { error } = await supabase
+      .from('control_events')
+      .update({
         name: form.name.trim(),
         date: form.date || null,
         disciplines: form.disciplines,
       })
-      if (error) { alert('Ошибка создания: ' + error.message); return }
-    }
-
-    setShowModal(false)
-    setEditingId(null)
-    setForm({ name: 'День зачет', date: '', disciplines: [] })
-    fetchEvents()
-  }
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Удалить этот зачет?')) return
-    if (!coachProfile) return
-    const { error } = await supabase
-      .from('control_events')
-      .delete()
-      .eq('id', id)
+      .eq('id', editingId)
       .eq('coach_id', coachProfile.id)
-    if (error) { alert('Ошибка удаления: ' + error.message); return }
-    fetchEvents()
+    if (error) { alert('Ошибка сохранения: ' + error.message); return }
+
+    // Синхронизируем автоматически созданную запись тренировки, если она есть
+    if (prevEvent) {
+      const linkedTrainingId = await findLinkedTraining(prevEvent)
+      if (linkedTrainingId) {
+        await supabase
+          .from('trainings')
+          .update({ date: eventDate, goal: form.name.trim() })
+          .eq('id', linkedTrainingId)
+      }
+    }
+  } else {
+    const { error } = await supabase.from('control_events').insert({
+      coach_id: coachProfile.id,
+      name: form.name.trim(),
+      date: form.date || null,
+      disciplines: form.disciplines,
+    })
+    if (error) { alert('Ошибка создания: ' + error.message); return }
+
+    // Контрольный зачёт автоматически появляется в журнале тренировок
+    const { error: trainingError } = await supabase.from('trainings').insert({
+      coach_id: coachProfile.id,
+      date: eventDate,
+      type: 'Контрольный зачет',
+      duration: 60,
+      intensity: 'medium',
+      goal: form.name.trim(),
+      notes: `Дисциплины: ${form.disciplines.join(', ') || '—'}`,
+      athlete_ids: athletes.map(a => a.id),
+      attended_ids: [],
+    })
+    if (trainingError) {
+      console.error('Не удалось добавить зачёт в журнал тренировок:', trainingError)
+    }
   }
+
+  setShowModal(false)
+  setEditingId(null)
+  setForm({ name: 'День зачет', date: '', disciplines: [] })
+  fetchEvents()
+}
+
+const handleDelete = async (evt: ControlEvent) => {
+  if (!confirm('Удалить этот зачет? Результаты спортсменов по этому зачету тоже будут удалены.')) return
+  if (!coachProfile) return
+
+  // Сначала удаляем результаты, привязанные к зачёту — иначе они остаются
+  // висеть у спортсменов со ссылкой на уже несуществующий зачёт.
+  const { error: resultsError } = await supabase
+    .from('results')
+    .delete()
+    .eq('control_event_id', evt.id)
+  if (resultsError) { alert('Ошибка удаления результатов: ' + resultsError.message); return }
+
+  // Удаляем связанную запись из журнала тренировок, если она создавалась автоматически
+  const linkedTrainingId = await findLinkedTraining(evt)
+  if (linkedTrainingId) {
+    await supabase.from('trainings').delete().eq('id', linkedTrainingId)
+  }
+
+  const { error } = await supabase
+    .from('control_events')
+    .delete()
+    .eq('id', evt.id)
+    .eq('coach_id', coachProfile.id)
+  if (error) { alert('Ошибка удаления: ' + error.message); return }
+
+  await refreshAthletesData()
+  fetchEvents()
+}
 
   const toggleDiscipline = (d: string) => {
     setForm(prev => ({
@@ -211,7 +273,7 @@ export default function ControlEvents() {
         </button>
 
         <button
-          onClick={(e) => { e.stopPropagation(); handleDelete(evt.id) }}
+          onClick={(e) => { e.stopPropagation(); handleDelete(evt) }}
           style={{ background: 'transparent', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: 12, padding: 4 }}
           title="Удалить"
         >
