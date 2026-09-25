@@ -63,16 +63,14 @@ export default function Athletes() {
     const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
     if (!file) {
-      setForm({ ...form, photoFile: null });
+      setForm({ ...form, photoFile: null, photoDataUrl: undefined });
       setPhotoPreview(null);
       return;
     }
     try {
       const resized = await resizeImageFile(file);
-      // Кладём уже сжатый base64 сразу в превью; photoFile больше не нужен —
-      // передадим готовую строку через addAthlete напрямую (см. ниже правку контекста).
       setPhotoPreview(resized);
-      setForm({ ...form, photoFile: file, photoDataUrl: resized } as any);
+      setForm({ ...form, photoFile: file, photoDataUrl: resized });
     } catch {
       alert('Не удалось обработать фото');
     }
@@ -99,6 +97,7 @@ export default function Athletes() {
       shoeSize: form.shoeSize,
       trainingStart: form.trainingStart || undefined,
       photoFile: form.photoFile,
+      photoDataUrl: form.photoDataUrl, // добавлено — раньше сжатое превью терялось
     };
     const { error } = await addAthlete(input);
     if (error) {
