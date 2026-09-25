@@ -491,20 +491,26 @@ export const AthletesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
  const addResult = async (input: NewResultInput) => {
   if (!coachProfile?.id || !user?.id) return { error: 'Нет профиля тренера' };
 
-  // 1. Найти существующую дисциплину по имени
-  const { data: existingDiscipline, error: findError } = await supabase
-    .from('disciplines')
-    .select('id')
-    .or(`is_default.eq.true,coach_id.eq.${coachProfile.id}`)
-    .eq('name', input.discipline)
-    .maybeSingle();
+  // src/contexts/Athletescontext.tsx, внутри addResult
 
-  if (findError) {
-    console.error('Ошибка поиска дисциплины:', findError);
-    return { error: getFriendlySupabaseError(findError) };
-  }
+// 1. Найти существующую дисциплину по имени.
+// .maybeSingle() падал с ошибкой, если по имени находится больше одной строки
+// (например, дефолтная дисциплина + своя запись тренера с тем же названием) —
+// именно из-за этого "Подтягивания"/"Отжимания" не сохранялись.
+const { data: matchingDisciplines, error: findError } = await supabase
+  .from('disciplines')
+  .select('id, is_default')
+  .or(`is_default.eq.true,coach_id.eq.${coachProfile.id}`)
+  .eq('name', input.discipline)
+  .order('is_default', { ascending: false })
+  .limit(1);
 
-  let disciplineId = existingDiscipline?.id as string | undefined;
+if (findError) {
+  console.error('Ошибка поиска дисциплины:', findError);
+  return { error: getFriendlySupabaseError(findError) };
+}
+
+let disciplineId = matchingDisciplines?.[0]?.id as string | undefined;
 
   if (!disciplineId) {
     const { data: newDiscipline, error: createError } = await supabase
