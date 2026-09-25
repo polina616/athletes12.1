@@ -1,5 +1,5 @@
 import { useAuth } from './contexts/AuthContext';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -73,7 +73,6 @@ export default function App() {
         userName={displayName}
         role={role}
         onLogout={signOut}
-        notifications={3}
       />
 
       <main style={{ marginLeft: 220, flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
@@ -200,36 +199,49 @@ export default function App() {
     </div>
   )
 }
-
 function SettingsPlaceholder() {
+  const navigate = useNavigate();
+  const cards: { label: string; path?: string }[] = [
+    { label: 'Дисциплины', path: '/disciplines' },
+    { label: 'Возрастные категории' },
+    { label: 'Разряды' },
+    { label: 'Коэффициенты ИААФ' },
+    { label: 'Внешний вид' },
+    { label: 'Уведомления' },
+    { label: 'Резервные копии' },
+    { label: 'Управление тренерами' },
+  ];
   return (
     <div style={{ animation: 'fadeIn 0.35s ease forwards' }}>
       <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 36, fontWeight: 800, color: '#f0f2f5', margin: '0 0 24px', letterSpacing: '0.01em' }}>
         НАСТРОЙКИ
       </h1>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
-        {['Дисциплины', 'Возрастные категории', 'Разряды', 'Коэффициенты ИААФ', 'Внешний вид', 'Уведомления', 'Резервные копии', 'Управление тренерами'].map(s => (
-          <div key={s} style={{
-            background: 'rgba(15,17,23,0.8)',
-            border: '1px solid #1e2230',
-            borderRadius: 10,
-            padding: '18px 20px',
-            backdropFilter: 'blur(12px)',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            transition: 'border-color 0.15s',
-          }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = '#2a3040'}
+        {cards.map(s => (
+          <div key={s.label}
+            onClick={() => s.path && navigate(s.path)}
+            style={{
+              background: 'rgba(15,17,23,0.8)',
+              border: '1px solid #1e2230',
+              borderRadius: 10,
+              padding: '18px 20px',
+              backdropFilter: 'blur(12px)',
+              cursor: s.path ? 'pointer' : 'default',
+              opacity: s.path ? 1 : 0.55,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              transition: 'border-color 0.15s',
+            }}
+            onMouseEnter={e => { if (s.path) (e.currentTarget as HTMLElement).style.borderColor = '#2a3040' }}
             onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = '#1e2230'}
           >
             <div style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(198,241,53,0.08)', border: '1px solid rgba(198,241,53,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
               ⚙
             </div>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#f0f2f5' }}>{s}</div>
-              <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>Настроить</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#f0f2f5' }}>{s.label}</div>
+              <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{s.path ? 'Настроить' : 'Скоро'}</div>
             </div>
           </div>
         ))}
