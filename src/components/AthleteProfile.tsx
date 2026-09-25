@@ -21,14 +21,18 @@ const ageGroupLabels: Record<string, string> = {
   senior: 'Старшая',
 };
 
-export default function AthleteProfile() {
+xport default function AthleteProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { athletes, results, injuries, updateAthlete, addInjury, updateInjury, deleteInjury } = useAthletes();
+  const { athletes, results, injuries, loading, updateAthlete, addInjury, updateInjury, deleteInjury } = useAthletes();
   const [tab, setTab] = useState<'results' | 'decathlon' | 'profile' | 'attendance' | 'injuries'>('results');
   const [showEdit, setShowEdit] = useState(false);
 
   const athlete = athletes.find(a => a.id === id);
+
+  if (loading) {
+    return <div style={{ color: '#6b7280', padding: 40 }}>Загрузка...</div>;
+  }
   if (!athlete) return <div style={{ color: '#6b7280', padding: 40 }}>Спортсмен не найден</div>;
 
   const athleteResults = results.filter(r => r.athleteId === id);
@@ -188,15 +192,16 @@ function EditModal({ athlete, onClose, onSave }: { athlete: any; onClose: () => 
     trainingStart: athlete.trainingStart,
     status: athlete.status,
     photoFile: null as File | null,
+    photoDataUrl: undefined as string | undefined,
   });
 
-    const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
     if (!file) return;
     try {
       const resized = await resizeImageFile(file);
       setPhotoPreview(resized);
-      setForm({ ...form, photoFile: file, photoDataUrl: resized } as any);
+      setForm({ ...form, photoFile: file, photoDataUrl: resized });
     } catch {
       alert('Не удалось обработать фото');
     }
@@ -222,6 +227,7 @@ function EditModal({ athlete, onClose, onSave }: { athlete: any; onClose: () => 
       shoeSize: form.shoeSize ? Number(form.shoeSize) : undefined,
       trainingStart: form.trainingStart || undefined,
       photoFile: form.photoFile || undefined,
+      photoDataUrl: form.photoDataUrl, // добавлено
     });
     if (error) {
       setFormError(error);
@@ -366,8 +372,6 @@ function EditModal({ athlete, onClose, onSave }: { athlete: any; onClose: () => 
 
 /* ========== Tabs ========== */
 function ResultsTab({ results }: { results: any[] }) {
-  if (results.length === 0) return <EmptyState text="Нет результатов" />;
-
   const grouped = new Map<string, any[]>();
   for (const r of results) {
     const cat = categorizeDiscipline(r.discipline);
@@ -376,14 +380,13 @@ function ResultsTab({ results }: { results: any[] }) {
     grouped.set(cat, arr);
   }
 
-  // Сначала категории в заданном порядке (если есть данные), затем всё остальное (на случай новых категорий).
   const orderedCats = [
     ...DISCIPLINE_CATEGORY_ORDER.filter(c => grouped.has(c)),
     ...[...grouped.keys()].filter(c => !DISCIPLINE_CATEGORY_ORDER.includes(c)),
   ];
 
-  // По умолчанию свёрнуты все категории, кроме первой — так сразу видно последние результаты,
-  // а остальное открывается по необходимости.
+  // Хук теперь вызывается всегда, независимо от количества результатов —
+  // иначе React ловит "Rendered fewer hooks than expected" при переходе 0 → 1 результат
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     orderedCats.forEach((cat, i) => { initial[cat] = i !== 0; });
@@ -400,6 +403,8 @@ function ResultsTab({ results }: { results: any[] }) {
     orderedCats.forEach(cat => { next[cat] = value; });
     setCollapsed(next);
   };
+
+  if (results.length === 0) return <EmptyState text="Нет результатов" />;
 
   return (
     <div>
