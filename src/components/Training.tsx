@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { IconPlus, IconChevron } from './Icons'
+import { IconPlus, IconChevron, IconTrash } from './Icons'
 import { useAthletes } from '../contexts/Athletescontext'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabaseClient'
@@ -173,7 +173,19 @@ export default function Training() {
       setTrainings(prev => prev.map(t => t.id === trainingId ? training : t))
     }
   }
+const deleteTraining = async (trainingId: string) => {
+  if (!confirm('Удалить эту тренировку? Данные о посещаемости будут потеряны.')) return
+  const prev = trainings
+  // Оптимистично убираем из UI сразу
+  setTrainings(p => p.filter(t => t.id !== trainingId))
+  if (selectedTraining === trainingId) setSelectedTraining(null)
 
+  const { error } = await supabase.from('trainings').delete().eq('id', trainingId)
+  if (error) {
+    alert('Ошибка удаления: ' + error.message)
+    setTrainings(prev) // откатываем при ошибке
+  }
+}
   const firstDay = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const offset = (firstDay + 6) % 7
@@ -360,9 +372,23 @@ export default function Training() {
                       </tr>
 
                       {isOpen && (
-                        <tr style={{ borderBottom: i < filteredTrainings.length - 1 ? '1px solid rgba(30,34,48,0.5)' : 'none' }}>
-                          <td colSpan={8} style={{ padding: '0 16px 20px 40px', background: 'rgba(198,241,53,0.02)' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, paddingTop: 4 }}>
+  <tr style={{ borderBottom: i < filteredTrainings.length - 1 ? '1px solid rgba(30,34,48,0.5)' : 'none' }}>
+    <td colSpan={8} style={{ padding: '0 16px 20px 40px', background: 'rgba(198,241,53,0.02)' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 8, marginBottom: -4 }}>
+        <button
+          onClick={(e) => { e.stopPropagation(); deleteTraining(t.id) }}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '5px 10px', background: 'transparent',
+            border: '1px solid rgba(248,113,113,0.25)', borderRadius: 6,
+            color: '#f87171', fontSize: 11, cursor: 'pointer',
+          }}
+        >
+          <IconTrash /> Удалить тренировку
+        </button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, paddingTop: 4 }}>
+                             
                               <div>
                                 <div style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Цель</div>
                                 <div style={{ fontSize: 13, color: '#d1d5db', marginBottom: 12, padding: '10px', background: 'rgba(20,23,32,0.5)', borderRadius: 6 }}>
