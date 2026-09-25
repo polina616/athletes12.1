@@ -34,7 +34,11 @@ interface UpcomingEvent {
   date: string
   disciplineCount: number
 }
-
+function currentSeasonLabel(): string {
+  const now = new Date()
+  const startYear = now.getMonth() < 7 ? now.getFullYear() - 1 : now.getFullYear() // сезон начинается в августе
+  return `Сезон ${startYear}–${startYear + 1}`
+}
 export default function Dashboard() {
   const { athletes: allAthletes, results: allResults, injuries: allInjuries, loading } = useAthletes()
   const { coachProfile } = useAuth()
@@ -243,7 +247,7 @@ export default function Dashboard() {
               fontWeight: 600,
             }}
           >
-            Сезон 2024–2025
+            {currentSeasonLabel()}
           </div>
           <h1
             style={{
