@@ -92,6 +92,15 @@ export default function ControlEvents() {
     fetchEvents()
   }, [coachProfile])
 
+  // Если открытое в модалке результатов событие пропало из списка (удалили,
+  // список обновился в другой вкладке и т.п.) — закрываем модалку сами,
+  // иначе рендер ниже попытается собрать событие из undefined и упадёт.
+  useEffect(() => {
+    if (resultsEventId && !events.some(e => e.id === resultsEventId)) {
+      setResultsEventId(null)
+    }
+  }, [events, resultsEventId])
+
   const openCreate = () => {
     setEditingId(null)
     setForm({ name: 'День зачет', date: new Date().toISOString().slice(0, 10), disciplines: [] })
@@ -488,15 +497,19 @@ const handleDelete = async (evt: ControlEvent) => {
             </div>
          </Modal>
         )}
-        {resultsEventId && (
-  <ControlEventResults
-    event={{
-      ...events.find(e => e.id === resultsEventId)!,
-      athleteIds: [], // если поле athleteIds ещё не добавлено в интерфейс/БД — временно пустой массив, см. ниже
-    }}
-    onClose={() => setResultsEventId(null)}
-  />
-)}
+        {resultsEventId && (() => {
+          const evt = events.find(e => e.id === resultsEventId)
+          if (!evt) return null
+          return (
+            <ControlEventResults
+              event={{
+                ...evt,
+                athleteIds: [], // поле athleteIds ещё не хранится в БД для зачёта — временно пустой массив
+              }}
+              onClose={() => setResultsEventId(null)}
+            />
+          )
+        })()}
     </div>
   )
 }
