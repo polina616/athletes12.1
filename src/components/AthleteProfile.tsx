@@ -21,7 +21,7 @@ const ageGroupLabels: Record<string, string> = {
   senior: 'Старшая',
 };
 
-xport default function AthleteProfile() {
+export default function AthleteProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { athletes, results, injuries, loading, updateAthlete, addInjury, updateInjury, deleteInjury } = useAthletes();
@@ -195,7 +195,7 @@ function EditModal({ athlete, onClose, onSave }: { athlete: any; onClose: () => 
     photoDataUrl: undefined as string | undefined,
   });
 
-  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
     if (!file) return;
     try {
@@ -227,7 +227,7 @@ function EditModal({ athlete, onClose, onSave }: { athlete: any; onClose: () => 
       shoeSize: form.shoeSize ? Number(form.shoeSize) : undefined,
       trainingStart: form.trainingStart || undefined,
       photoFile: form.photoFile || undefined,
-      photoDataUrl: form.photoDataUrl, // добавлено
+      photoDataUrl: form.photoDataUrl,
     });
     if (error) {
       setFormError(error);
@@ -380,13 +380,16 @@ function ResultsTab({ results }: { results: any[] }) {
     grouped.set(cat, arr);
   }
 
+  // Сначала категории в заданном порядке (если есть данные), затем всё остальное (на случай новых категорий).
   const orderedCats = [
     ...DISCIPLINE_CATEGORY_ORDER.filter(c => grouped.has(c)),
     ...[...grouped.keys()].filter(c => !DISCIPLINE_CATEGORY_ORDER.includes(c)),
   ];
 
-  // Хук теперь вызывается всегда, независимо от количества результатов —
-  // иначе React ловит "Rendered fewer hooks than expected" при переходе 0 → 1 результат
+  // По умолчанию свёрнуты все категории, кроме первой — так сразу видно последние результаты,
+  // а остальное открывается по необходимости.
+  // Хук вызывается всегда, до любого условного return — иначе при переходе
+  // 0 результатов -> 1 результат React ловит "Rendered fewer hooks than expected".
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     orderedCats.forEach((cat, i) => { initial[cat] = i !== 0; });
